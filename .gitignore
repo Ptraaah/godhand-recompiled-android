@@ -1,0 +1,38 @@
+# Build output
+build/
+out/
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# Android / NDK
+.cxx/
+.externalNativeBuild/
+captures/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Generated game code: produced locally from your own disc, never committed
+generated/
+generated_modules/
+
+# Game data: NEVER commit a disc image or extracted game files
+*.iso
+*.bin
+*.img
+*.elf
+*.rel
+*.afs
+disc/
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
