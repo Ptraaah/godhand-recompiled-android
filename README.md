@@ -8,11 +8,14 @@ There are Android builds of this game floating around, and they do run. The prob
 
 ## Status
 
-Early, and stated plainly: there is nothing playable to download yet.
+Further along than it sounds, and still stated plainly: it boots and renders on a real phone, and it is not playable yet.
 
-- The recompiler builds and runs, and the runtime + game layer compile and link as a whole program.
-- Milestone 1 is the translation proof: the game's own code — 10,554 functions plus its 81 overlay modules, generated from a real disc — translates and builds whole. That full compile is the step in flight right now.
-- Next is milestone 2: the Android shell (app, touch controls, storage, audio), aimed at a first boot on a real phone.
+- The full game code translates, links and boots on a POCO F5 from a real disc: intro, logos, menus.
+- The original CPU renderer drew everything but ran the title screen at 1 FPS; measurement pinned the cost to its GS fetch/present leg (99-100% of frame time).
+- A GPU renderer now exists for Android where none did: EGL ES 3.2 context, desktop shaders translated to GLSL ES at load (9/9 validated), ES resolutions for the desktop-only GL entry points. Title and menus run at a real 60 FPS on it, and the 3D game world renders correctly through it.
+- The open wall is in-game frame production: under real scene load the guest completes only ~1-3 new frames per second, so gameplay looks frozen while menus fly. That is being instrumented and measured now, the same way the title wall was found.
+
+The full story with device screenshots and boot-log numbers lives in [docs/PROGRESS.md](docs/PROGRESS.md).
 
 The detailed roadmap lives in [docs/ROADMAP.md](docs/ROADMAP.md).
 
