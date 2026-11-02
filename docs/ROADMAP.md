@@ -29,9 +29,9 @@ Prove the whole game translates and builds, on a Linux host first.
 - Generation inputs from the owner's own disc are pinned down: the 3.6 MB
   boot program (SLUS_215.03, SHA-256 verified), GODHAND.FST, and the 81
   overlay modules — about 9 MB total, not the 1.57 GB disc image.
-- Remaining step: the full compile of the ~10k generated game sources with
-  the real modules in. That build, not the host, is where any remaining
-  surprises live.
+- Status: done. The full compile of the ~10k generated game sources with
+  the real modules in landed whole, and the linked program boots on the
+  phone. Details in docs/PROGRESS.md and the M1A-M2C reports.
 
 ## Milestone 2 — Android shell
 
@@ -45,20 +45,25 @@ Make it an app a phone can run.
 - Settings that persist and stay reachable — the sealed-build behaviour
   (choices silently resetting on every start) is the specific thing this
   shell exists to not do.
-- Target: first boot to the title screen on a real phone, then stages 1–3
-  playable.
+- Status: done, and past the target. The app boots through the intro to
+  the title and menus on a real phone (POCO F5), with the settings page,
+  layout editor and remapping all live. Playability is now a renderer
+  question, which is Milestone 3.
 
 ## Milestone 3 — renderer, tuned per stage
 
 The graphics chip is translated at runtime by design; performance lives
 or dies here.
 
-- Two candidate paths: port the runtime's own GS to GLES 3.2 with a CPU
-  rasteriser fallback, or build PCSX2's GS as an Android Vulkan library
-  (the route the existing private build evidently took, and the
-  performance answer if it holds up).
-- Internal resolution and per-scene tuning decided on real hardware
-  (a Snapdragon 7+ Gen 2 phone is the reference device), not on a desktop.
+- Path taken: the runtime's own GS, brought to Android as an EGL
+  OpenGL ES 3.2 backend with its shaders translated from desktop GLSL at
+  load time. The CPU rasteriser path remains as the fallback and the
+  measurement baseline. The Vulkan/PCSX2 route was not needed.
+- Where it stands: title and menus run at a real 60 FPS on the GPU
+  backend and the 3D world renders; the open work is in-game frame
+  production under scene load (the guest completes ~1-3 new frames per
+  second there today), being instrumented per scene on the reference
+  phone, a Snapdragon 7+ Gen 2 (Adreno 725).
 - Testing debt stated openly: upstream verifies the game only through
   stage 3, on any platform. Stages 4 to the end get tested here, on the
   phone, as part of this milestone.
