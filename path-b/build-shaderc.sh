@@ -15,7 +15,11 @@ rm -rf "$SRC" "$OUT"
 cp -r "$NDK/sources/third_party/shaderc" "$SRC"
 chmod -R u+w "$SRC"
 
-( cd "$SRC" && "$NDK/ndk-build" -j"$(nproc)" )
+# The shaderc tree keeps Android.mk at its root, not under jni/, so
+# ndk-build needs the project layout spelled out or it aborts with
+# "Could not find application project directory".
+"$NDK/ndk-build" NDK_PROJECT_PATH="$SRC" APP_BUILD_SCRIPT="$SRC/Android.mk" \
+    NDK_APPLICATION_MK="$SRC/Application.mk" -j"$(nproc)"
 
 OBJ="$SRC/obj/local/arm64-v8a"
 LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
