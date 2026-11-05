@@ -36,3 +36,7 @@ disc/
 .idea/
 *.iml
 .DS_Store
+
+# CI byproducts: the NDK shaderc sources are copied in at build time
+path-b/shaderc-src/
+path-b/shaderc-out/
