@@ -15,6 +15,15 @@ rm -rf "$SRC" "$OUT"
 cp -r "$NDK/sources/third_party/shaderc" "$SRC"
 chmod -R u+w "$SRC"
 
+# The NDK ships this tree without an Application.mk; the local build
+# wrote one. Same contents here (arm64, android-26, c++_static, C++17).
+cat > "$SRC/Application.mk" <<'EOF'
+APP_ABI := arm64-v8a
+APP_PLATFORM := android-26
+APP_STL := c++_static
+APP_CPPFLAGS := -std=c++17
+EOF
+
 # The shaderc tree keeps Android.mk at its root, not under jni/, so
 # ndk-build needs the project layout spelled out or it aborts with
 # "Could not find application project directory".
