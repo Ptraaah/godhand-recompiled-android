@@ -1,0 +1,802 @@
+package dev.ptraaa.godhand;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
+import android.provider.OpenableColumns;
+import android.util.StateSet;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+
+// Milestone 2b shell: same job as 2a (pick the owner's own God Hand (USA)
+// ISO once, start the game, read/share the boot log), hardened after the
+// 2a on-device test on the owner's POCO F5 (Android 15 / HyperOS 2,
+// targetSdk 35). There, under the legacy framework Material action-bar
+// theme, the launcher's first three children (title, status, pick button)
+// never became visible even though the shipped dex proves they were built
+// and added exactly like the visible ones, and START left no trace
+// anywhere because nothing on the Java side wrote anything before the
+// native glue ran. So this version:
+//   - runs on a NoActionBar theme and gives EVERY view explicit colors
+//     (dark background, light text, colored buttons) and generous
+//     explicit heights in code - no theme-dependent rendering;
+//   - pads the content for the status/navigation bars in code (resource
+//     fallback first, exact window insets when they arrive);
+//   - appends a timestamped line to godhand-boot.log from the JAVA side
+//     the moment START is pressed, and around the GameActivity launch,
+//     so every press leaves evidence whatever dies afterwards;
+//   - routes START through the ISO picker first when no ISO is stored.
+//
+// Milestone 3 (0.4-m3): the port boots on the phone but cannot mount the
+// disc through the borrowed /proc/self/fd path (0.3-m2c log: "[CDIMAGE]
+// cannot open /proc/self/fd/187", port returned 3). So the launcher now
+// copies the picked ISO ONCE into the app's internal files dir
+// (getFilesDir()/godhand.iso) and the port is handed that real file path
+// instead; the picker fd stays only as a fallback when no copy exists.
+// The copy is keyed by size: it is reused while godhand.iso has exactly
+// the picked document's size (and was copied from the same picked
+// document); picking a different ISO replaces it. Copy progress lives on
+// the status line; every copy start/finish/failure is written to the
+// boot log and shown on the status line - never a crash.
+//
+// Milestone 8 (0.9-m8): the owner reported "Gabisa digeser" - the page
+// could not be scrolled. He was right: every row lived in one plain
+// LinearLayout set directly as the content view, so once the Milestone
+// 5 settings and remap rows made the content taller than the screen,
+// everything below the fold (Share boot log included) was simply
+// unreachable. The whole page now sits inside a ScrollView; the boot
+// log pane keeps its own small fixed-height scroll area inside the
+// page, and Share boot log moved to the top of the page, directly
+// under Start, so it is reachable without scrolling at all.
+public class LauncherActivity extends Activity {
+    static final String PREFS = "godhand_shell";
+    static final String KEY_ISO_URI = "iso_uri";
+    // Size of the currently picked document (from the provider at pick
+    // time; -1 when the provider would not tell us).
+    static final String KEY_ISO_SIZE = "iso_size";
+    // Uri the completed godhand.iso copy was made from, and its size.
+    static final String KEY_COPY_URI = "iso_copy_uri";
+    static final String KEY_COPY_SIZE = "iso_copy_size";
+    static final String ISO_COPY_NAME = "godhand.iso";
+    private static final int REQ_PICK_ISO = 1;
+
+    // Milestone 5: the owner's settings. Written here, read by
+    // GameActivity at game start (the glue turns scale/threads/vsync
+    // into the port's environment; opacity/size/FPS shape the overlay;
+    // the mapping keys live in PadMapping). Defaults: scale 1, FPS on,
+    // threads off (Milestone 6: the Milestone 5 governor stays selectable
+    // but is no longer the default until it is proven on device), vsync
+    // on, opacity high, button size 100%.
+    static final String KEY_SET_SCALE = "set_scale";
+    static final String KEY_SET_FPS = "set_fps";
+    static final String KEY_SET_THREADS = "set_threads";
+    static final String KEY_SET_VSYNC = "set_vsync";
+    // Milestone 7: disc prefetch (the port's whole-ISO background read).
+    // Default off, as it has effectively been inside the app all along
+    // via the glue's silent env default; now the owner controls it.
+    static final String KEY_SET_PREFETCH = "set_prefetch";
+    // Milestone 10: GPU renderer (the port's GSGpuBackend, PS2X_GS_GPU).
+    // Default off: the CPU rasteriser is the proven path. The GPU
+    // backend's GL context creation is Windows-only in this tree (see
+    // M10.md), so ON is an experiment the owner runs for evidence.
+    static final String KEY_SET_GPU = "set_gpu";
+    // Path B stage B6: widescreen 16:9 (game aspect patch + composed 16:9
+    // frame in the path B build). Stage B7: default off (owner opt-in).
+    static final String KEY_SET_WIDE = "set_wide";
+    static final String KEY_SET_OPACITY = "set_opacity";
+    static final String KEY_SET_BTNSIZE = "set_btnsize";
+    private static final String[] SCALE_VALUES = {"0.5", "0.75", "1", "1.5", "2", "3"};
+    private static final String[] OPACITY_VALUES = {"high", "medium", "low"};
+    private static final String[] SIZE_VALUES = {"80", "90", "100", "110", "125", "140"};
+
+    private static final int COL_BG = Color.rgb(16, 16, 18);
+    private static final int COL_PANEL = Color.rgb(30, 30, 34);
+    private static final int COL_TEXT = Color.rgb(240, 240, 240);
+    private static final int COL_STATUS = Color.rgb(255, 213, 79);
+    private static final int COL_LOG = Color.rgb(204, 204, 204);
+    private static final int COL_PICK = Color.rgb(21, 101, 192);
+    private static final int COL_START = Color.rgb(46, 125, 50);
+    private static final int COL_PLAIN = Color.rgb(55, 55, 60);
+
+    private TextView status;
+    private TextView logView;
+    private Button pickButton;
+    private Button startButton;
+    private Button scaleButton;
+    private Button fpsButton;
+    private Button threadsButton;
+    private Button vsyncButton;
+    private Button prefetchButton;
+    private Button gpuButton;
+    private Button wideButton;
+    private Button opacityButton;
+    private Button sizeButton;
+    private final Map<String, Button> touchRemapButtons = new HashMap<>();
+    private final Map<String, Button> padRemapButtons = new HashMap<>();
+    private boolean startAfterPick;
+
+    // ISO copy state (Milestone 3). copying/progress are touched from the
+    // copy thread; all UI writes go through runOnUiThread.
+    private volatile boolean copying;
+    private volatile boolean pendingLaunch;
+    private volatile String copyStatusText = "";
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private int statusBarHeight() {
+        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(24);
+    }
+
+    private Button makeButton(String text, int color) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextSize(16);
+        button.setAllCaps(false);
+        button.setTextColor(Color.WHITE);
+        GradientDrawable normal = new GradientDrawable();
+        normal.setColor(color);
+        normal.setCornerRadius(dp(10));
+        GradientDrawable pressed = new GradientDrawable();
+        pressed.setColor(Color.rgb(
+                (int) (Color.red(color) * 0.65),
+                (int) (Color.green(color) * 0.65),
+                (int) (Color.blue(color) * 0.65)));
+        pressed.setCornerRadius(dp(10));
+        StateListDrawable background = new StateListDrawable();
+        background.addState(new int[]{android.R.attr.state_pressed}, pressed);
+        background.addState(StateSet.WILD_CARD, normal);
+        button.setBackground(background);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(58));
+        params.topMargin = dp(10);
+        button.setLayoutParams(params);
+        return button;
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(COL_BG);
+        final int pad = dp(16);
+        // Base padding already clears the status bar if insets never
+        // arrive; the listener replaces it with the exact insets.
+        root.setPadding(pad, pad + statusBarHeight(), pad, pad);
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.setPadding(
+                    pad + insets.getSystemWindowInsetLeft(),
+                    pad + insets.getSystemWindowInsetTop(),
+                    pad + insets.getSystemWindowInsetRight(),
+                    pad + insets.getSystemWindowInsetBottom());
+            return insets;
+        });
+
+        TextView title = new TextView(this);
+        title.setText("God Hand — recompiled (0.19-m18)");
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextColor(COL_TEXT);
+        root.addView(title);
+
+        status = new TextView(this);
+        status.setTextSize(14);
+        status.setTextColor(COL_STATUS);
+        status.setBackgroundColor(COL_PANEL);
+        status.setPadding(dp(12), dp(10), dp(12), dp(10));
+        status.setMinHeight(dp(48));
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = dp(10);
+        status.setLayoutParams(statusParams);
+        root.addView(status);
+
+        pickButton = makeButton("1. Pick your God Hand (USA) ISO", COL_PICK);
+        pickButton.setOnClickListener(v -> {
+            if (copying) {
+                status.setText("ISO copy in progress - please wait for it to finish.");
+                BootLog.append(this, "pick pressed during ISO copy - ignored");
+                return;
+            }
+            startAfterPick = false;
+            openPicker();
+        });
+        root.addView(pickButton);
+
+        startButton = makeButton("2. Start the game", COL_START);
+        startButton.setOnClickListener(v -> onStartPressed());
+        root.addView(startButton);
+
+        // Milestone 8: Share boot log lives at the TOP of the page, right
+        // under Start - the button the owner needs after every test run
+        // must never depend on scrolling (it used to sit at the very
+        // bottom, below both remap sections).
+        Button share = makeButton("Share boot log", COL_PLAIN);
+        share.setOnClickListener(v -> shareLog());
+        root.addView(share);
+
+        // ---- Settings (Milestone 5): big cycle buttons; every tap saves
+        // at once and applies the next time the game starts.
+        root.addView(sectionTitle("Settings"));
+        scaleButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            String next = nextOf(SCALE_VALUES, prefs.getString(KEY_SET_SCALE, "1"));
+            prefs.edit().putString(KEY_SET_SCALE, next).apply();
+            refreshSettingsButtons();
+        });
+        fpsButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_FPS, !prefs.getBoolean(KEY_SET_FPS, true)).apply();
+            refreshSettingsButtons();
+        });
+        threadsButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_THREADS, !prefs.getBoolean(KEY_SET_THREADS, false)).apply();
+            refreshSettingsButtons();
+        });
+        vsyncButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_VSYNC, !prefs.getBoolean(KEY_SET_VSYNC, true)).apply();
+            refreshSettingsButtons();
+        });
+        prefetchButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_PREFETCH, !prefs.getBoolean(KEY_SET_PREFETCH, false)).apply();
+            refreshSettingsButtons();
+        });
+        gpuButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_GPU, !prefs.getBoolean(KEY_SET_GPU, false)).apply();
+            refreshSettingsButtons();
+        });
+        wideButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_WIDE, !prefs.getBoolean(KEY_SET_WIDE, false)).apply();
+            refreshSettingsButtons();
+        });
+        opacityButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            String next = nextOf(OPACITY_VALUES, prefs.getString(KEY_SET_OPACITY, "high"));
+            prefs.edit().putString(KEY_SET_OPACITY, next).apply();
+            refreshSettingsButtons();
+        });
+        sizeButton = addRow(root, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            String next = nextOf(SIZE_VALUES, prefs.getString(KEY_SET_BTNSIZE, "100"));
+            prefs.edit().putString(KEY_SET_BTNSIZE, next).apply();
+            refreshSettingsButtons();
+        });
+        Button resetLayoutButton = makeButton("Reset button layout", COL_PLAIN);
+        resetLayoutButton.setOnClickListener(v -> {
+            SharedPreferences.Editor editor = settingsPrefs().edit();
+            String[] ids = {"stick_left", "stick_right",
+                    "btn_triangle", "btn_circle", "btn_cross", "btn_square",
+                    "btn_l1", "btn_l2", "btn_r1", "btn_r2", "btn_start", "btn_select"};
+            for (String id : ids) {
+                editor.remove("lay_" + id + "_x");
+                editor.remove("lay_" + id + "_y");
+            }
+            editor.apply();
+            status.setText("Button layout reset - the game will use the default positions. "
+                    + "In the game, the EDIT button (top centre) moves the buttons.");
+        });
+        root.addView(resetLayoutButton);
+        TextView editHint = new TextView(this);
+        editHint.setText("Move buttons: in the game, tap EDIT at the top, drag the buttons where you want them, tap DONE.");
+        editHint.setTextSize(13);
+        editHint.setTextColor(COL_LOG);
+        root.addView(editHint);
+        refreshSettingsButtons();
+
+        // ---- Remap (Milestone 5): what each button sends.
+        root.addView(sectionTitle("Remap touch buttons"));
+        for (String control : PadMapping.TOUCH_CONTROLS) {
+            final String id = control;
+            Button row = addRow(root, v -> {
+                SharedPreferences prefs = settingsPrefs();
+                String next = PadMapping.nextTarget(PadMapping.touchTarget(prefs, id));
+                prefs.edit().putString(PadMapping.prefKeyTouch(id), next).apply();
+                refreshRemapButtons();
+            });
+            touchRemapButtons.put(id, row);
+        }
+        root.addView(sectionTitle("Remap gamepad buttons"));
+        for (String key : PadMapping.PAD_KEYS) {
+            final String id = key;
+            Button row = addRow(root, v -> {
+                SharedPreferences prefs = settingsPrefs();
+                String next = PadMapping.nextTarget(PadMapping.padTarget(prefs, id));
+                prefs.edit().putString(PadMapping.prefKeyPad(id), next).apply();
+                refreshRemapButtons();
+            });
+            padRemapButtons.put(id, row);
+        }
+        Button resetMappingButton = makeButton("Reset mapping", COL_PLAIN);
+        resetMappingButton.setOnClickListener(v -> {
+            SharedPreferences.Editor editor = settingsPrefs().edit();
+            for (String control : PadMapping.TOUCH_CONTROLS)
+                editor.remove(PadMapping.prefKeyTouch(control));
+            for (String key : PadMapping.PAD_KEYS)
+                editor.remove(PadMapping.prefKeyPad(key));
+            editor.apply();
+            refreshRemapButtons();
+            status.setText("Mapping reset to the standard layout.");
+        });
+        root.addView(resetMappingButton);
+        refreshRemapButtons();
+
+        Button refresh = makeButton("Reload boot log", COL_PLAIN);
+        refresh.setOnClickListener(v -> refreshUi());
+        root.addView(refresh);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Color.BLACK);
+        logView = new TextView(this);
+        logView.setTypeface(Typeface.MONOSPACE);
+        logView.setTextSize(11);
+        logView.setTextColor(COL_LOG);
+        logView.setPadding(dp(8), dp(8), dp(8), dp(8));
+        scroll.addView(logView);
+        // Milestone 8: the pane can no longer take "the rest of the page"
+        // by weight - inside the page ScrollView below there is no fixed
+        // rest. It gets a fixed height instead and keeps its own scroll
+        // for the log text; the page scrolls around it.
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(260));
+        scrollParams.topMargin = dp(10);
+        root.addView(scroll, scrollParams);
+
+        // Milestone 8: the whole page scrolls (see the class comment).
+        // The root keeps its own padding and insets listener; the
+        // ScrollView just carries it.
+        ScrollView page = new ScrollView(this);
+        page.setBackgroundColor(COL_BG);
+        page.setFillViewport(true);
+        page.setClipToPadding(false);
+        root.setLayoutParams(new ScrollView.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        page.addView(root);
+        setContentView(page);
+        root.requestApplyInsets();
+        BootLog.append(this, "launcher opened (0.19-m18)");
+        refreshUi();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshUi();
+    }
+
+    private String storedIso() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_ISO_URI, "");
+    }
+
+    private void openPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_PICK_ISO);
+            BootLog.append(this, "iso picker opened");
+        } catch (Throwable t) {
+            BootLog.append(this, "iso picker FAILED to open: " + BootLog.stack(t));
+            status.setText("Could not open the ISO picker: " + t.getMessage());
+            refreshLogView();
+        }
+    }
+
+    private void onStartPressed() {
+        boolean isoSet = !storedIso().isEmpty();
+        // The evidence line: written before anything else can fail.
+        BootLog.append(this, "start pressed, iso=" + (isoSet ? "set" : "unset"));
+        if (!isoSet) {
+            startAfterPick = true;
+            status.setText("No ISO picked yet - pick it now and the game starts by itself.");
+            openPicker();
+            refreshLogView();
+            return;
+        }
+        if (copying) {
+            // A copy is already running for this ISO; just make sure the
+            // game follows it.
+            pendingLaunch = true;
+            status.setText(copyStatusText);
+            BootLog.append(this, "start pressed during ISO copy - game will start when the copy finishes");
+            refreshLogView();
+            return;
+        }
+        // Milestone 3: the port needs the real file copy, not the picker
+        // fd. Copy first when there is no up-to-date copy, then start.
+        ensureCopy(true);
+    }
+
+    private void launchGame() {
+        try {
+            startActivity(new Intent(this, GameActivity.class));
+            BootLog.append(this, "GameActivity launch requested");
+        } catch (Throwable t) {
+            BootLog.append(this, "GameActivity launch FAILED: " + BootLog.stack(t));
+            status.setText("Could not start the game: " + t.getMessage());
+        }
+        refreshLogView();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_PICK_ISO) {
+            Uri uri = (resultCode == RESULT_OK && data != null) ? data.getData() : null;
+            if (uri != null) {
+                try {
+                    getContentResolver().takePersistableUriPermission(uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception e) {
+                    BootLog.append(this, "takePersistableUriPermission failed: " + e.getMessage());
+                }
+                long size = queryDocumentSize(uri);
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                        .putString(KEY_ISO_URI, uri.toString())
+                        .putLong(KEY_ISO_SIZE, size)
+                        .apply();
+                BootLog.append(this, "iso picked and stored (document size "
+                        + (size > 0 ? size + " bytes" : "unknown") + ")");
+                // Milestone 3: copy on pick, so the copy is already there
+                // when he later taps Start; if he came here FROM Start,
+                // the game follows the copy by itself.
+                boolean launch = startAfterPick;
+                startAfterPick = false;
+                ensureCopy(launch);
+            } else {
+                BootLog.append(this, "iso pick cancelled or returned nothing");
+                startAfterPick = false;
+            }
+        }
+        refreshUi();
+    }
+
+    // ------------------------------------------------------------------
+    // ISO copy (Milestone 3)
+    // ------------------------------------------------------------------
+
+    File isoCopyFile() {
+        return new File(getFilesDir(), ISO_COPY_NAME);
+    }
+
+    // The picked document's size, asked from the provider: the document
+    // column first, the descriptor's stat size as fallback. -1 = the
+    // provider would not say; the copy logic then trusts uri+length of a
+    // completed copy instead.
+    private long queryDocumentSize(Uri uri) {
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(uri,
+                    new String[]{OpenableColumns.SIZE}, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int idx = cursor.getColumnIndex(OpenableColumns.SIZE);
+                if (idx >= 0 && !cursor.isNull(idx)) {
+                    long size = cursor.getLong(idx);
+                    if (size > 0) return size;
+                }
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        ParcelFileDescriptor pfd = null;
+        try {
+            pfd = getContentResolver().openFileDescriptor(uri, "r");
+            if (pfd != null) {
+                long size = pfd.getStatSize();
+                if (size > 0) return size;
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            if (pfd != null) {
+                try { pfd.close(); } catch (Throwable ignored) { }
+            }
+        }
+        return -1;
+    }
+
+    // Reuse rule: a completed copy of the SAME picked document whose
+    // length still matches the copy record (and the provider-reported
+    // document size, when known) is used as-is. Anything else - no copy,
+    // a different document picked, a size drift - means (re)copy.
+    private boolean copyReady() {
+        File dest = isoCopyFile();
+        if (!dest.isFile() || dest.length() == 0) return false;
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String uri = prefs.getString(KEY_ISO_URI, "");
+        if (uri.isEmpty()) return false;
+        if (!uri.equals(prefs.getString(KEY_COPY_URI, ""))) return false;
+        if (dest.length() != prefs.getLong(KEY_COPY_SIZE, -1)) return false;
+        long docSize = prefs.getLong(KEY_ISO_SIZE, -1);
+        return docSize <= 0 || dest.length() == docSize;
+    }
+
+    private static String mb(long bytes) {
+        return Long.toString(Math.round(bytes / 1000000.0));
+    }
+
+    // Ensures godhand.iso matches the picked document, copying on a
+    // background thread with status-line progress when it does not.
+    // launchAfter (or a pending Start) starts the game on success.
+    private void ensureCopy(final boolean launchAfter) {
+        if (copyReady()) {
+            BootLog.append(this, "iso copy up to date (" + isoCopyFile().length()
+                    + " bytes) - no copy needed");
+            if (launchAfter) launchGame();
+            return;
+        }
+        if (copying) {
+            pendingLaunch = pendingLaunch || launchAfter;
+            return;
+        }
+        final String uriText = storedIso();
+        if (uriText.isEmpty()) return;
+        final Uri uri = Uri.parse(uriText);
+        final long expected = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getLong(KEY_ISO_SIZE, -1);
+        final File dest = isoCopyFile();
+        final File tmp = new File(getFilesDir(), ISO_COPY_NAME + ".tmp");
+
+        // Fail early and loudly rather than half-way through 1.5 GB.
+        if (expected > 0) {
+            long usable = getFilesDir().getUsableSpace();
+            if (usable > 0 && usable < expected + 32L * 1024 * 1024) {
+                String msg = "Not enough free space to copy the ISO into the app: need about "
+                        + mb(expected) + " MB, only " + mb(usable) + " MB free.";
+                BootLog.append(this, "iso copy FAILED before starting: " + msg);
+                status.setText(msg);
+                refreshLogView();
+                return;
+            }
+        }
+
+        copying = true;
+        pendingLaunch = launchAfter;
+        copyStatusText = "Copying the ISO into the app (one time): 0"
+                + (expected > 0 ? " of " + mb(expected) : "") + " MB. Leave the app open.";
+        status.setText(copyStatusText);
+        pickButton.setEnabled(false);
+        startButton.setEnabled(false);
+        BootLog.append(this, "iso copy started: " + uriText
+                + (expected > 0 ? " (expected " + expected + " bytes)" : " (document size unknown)"));
+        refreshLogView();
+
+        new Thread(() -> {
+            long copied = 0;
+            String failure = null;
+            try {
+                if (tmp.exists() && !tmp.delete()) {
+                    throw new java.io.IOException("could not clear the old partial copy");
+                }
+                InputStream in = getContentResolver().openInputStream(uri);
+                if (in == null) throw new java.io.IOException("the provider returned no stream");
+                FileOutputStream out = new FileOutputStream(tmp);
+                try {
+                    byte[] buffer = new byte[1024 * 1024];
+                    long lastShown = 0;
+                    int n;
+                    while ((n = in.read(buffer)) >= 0) {
+                        if (n == 0) continue;
+                        out.write(buffer, 0, n);
+                        copied += n;
+                        if (copied - lastShown >= 16L * 1024 * 1024) {
+                            lastShown = copied;
+                            final long shownCopied = copied;
+                            final String text = "Copying the ISO into the app (one time): "
+                                    + mb(shownCopied)
+                                    + (expected > 0
+                                            ? " of " + mb(expected) + " MB (" + (100 * shownCopied / expected) + "%)"
+                                            : " MB")
+                                    + ". Leave the app open.";
+                            runOnUiThread(() -> {
+                                copyStatusText = text;
+                                status.setText(text);
+                            });
+                        }
+                    }
+                } finally {
+                    try { out.close(); } catch (Throwable ignored) { }
+                    try { in.close(); } catch (Throwable ignored) { }
+                }
+                if (expected > 0 && copied != expected) {
+                    throw new java.io.IOException("copied " + copied + " bytes but the document is "
+                            + expected + " bytes");
+                }
+                if (dest.exists() && !dest.delete()) {
+                    throw new java.io.IOException("could not replace the old ISO copy");
+                }
+                if (!tmp.renameTo(dest)) {
+                    throw new java.io.IOException("could not move the finished copy into place");
+                }
+                final long doneBytes = copied;
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                        .putString(KEY_COPY_URI, uriText)
+                        .putLong(KEY_COPY_SIZE, doneBytes)
+                        .apply();
+            } catch (Throwable t) {
+                failure = t.getClass().getSimpleName() + ": " + t.getMessage();
+                try { if (tmp.exists()) tmp.delete(); } catch (Throwable ignored) { }
+            }
+            final String failText = failure;
+            final long totalCopied = copied;
+            runOnUiThread(() -> {
+                copying = false;
+                pickButton.setEnabled(true);
+                startButton.setEnabled(true);
+                boolean launch = pendingLaunch;
+                pendingLaunch = false;
+                if (failText == null) {
+                    BootLog.append(LauncherActivity.this, "iso copy done: godhand.iso is "
+                            + totalCopied + " bytes - the port now gets the real file");
+                    if (launch) {
+                        status.setText("ISO copy done (" + mb(totalCopied) + " MB). Starting the game...");
+                        launchGame();
+                    } else {
+                        status.setText("ISO copy done (" + mb(totalCopied)
+                                + " MB). Tap 2 to start the game.");
+                    }
+                } else {
+                    BootLog.append(LauncherActivity.this, "iso copy FAILED after "
+                            + totalCopied + " bytes: " + failText);
+                    status.setText("ISO copy failed: " + failText + " Tap 2 to try again.");
+                }
+                refreshLogView();
+            });
+        }, "iso-copy").start();
+    }
+
+    // ------------------------------------------------------------------
+    // Settings + remap rows (Milestone 5)
+    // ------------------------------------------------------------------
+
+    private SharedPreferences settingsPrefs() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    private TextView sectionTitle(String text) {
+        TextView title = new TextView(this);
+        title.setText(text);
+        title.setTextSize(17);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextColor(COL_TEXT);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(20);
+        title.setLayoutParams(params);
+        return title;
+    }
+
+    private Button addRow(LinearLayout root, android.view.View.OnClickListener listener) {
+        Button row = makeButton("", COL_PLAIN);
+        row.setOnClickListener(listener);
+        root.addView(row);
+        return row;
+    }
+
+    private static String nextOf(String[] values, String current) {
+        for (int i = 0; i < values.length; i++)
+            if (values[i].equals(current))
+                return values[(i + 1) % values.length];
+        return values[0];
+    }
+
+    private static String onOff(boolean value) {
+        return value ? "ON" : "OFF";
+    }
+
+    private void refreshSettingsButtons() {
+        SharedPreferences prefs = settingsPrefs();
+        scaleButton.setText("Internal resolution: " + prefs.getString(KEY_SET_SCALE, "1") + "x");
+        fpsButton.setText("FPS counter: " + onOff(prefs.getBoolean(KEY_SET_FPS, true)));
+        threadsButton.setText("Thread placement (performance cores): "
+                + onOff(prefs.getBoolean(KEY_SET_THREADS, false)));
+        vsyncButton.setText("VSync: " + onOff(prefs.getBoolean(KEY_SET_VSYNC, true)));
+        prefetchButton.setText("Disc prefetch (experimental): "
+                + onOff(prefs.getBoolean(KEY_SET_PREFETCH, false)));
+        gpuButton.setText("GPU renderer (experimental): "
+                + onOff(prefs.getBoolean(KEY_SET_GPU, false)));
+        wideButton.setText("Widescreen 16:9: "
+                + onOff(prefs.getBoolean(KEY_SET_WIDE, false)));
+        opacityButton.setText("Button opacity: " + prefs.getString(KEY_SET_OPACITY, "high"));
+        sizeButton.setText("Button size: " + prefs.getString(KEY_SET_BTNSIZE, "100") + "%");
+    }
+
+    private void refreshRemapButtons() {
+        SharedPreferences prefs = settingsPrefs();
+        for (Map.Entry<String, Button> entry : touchRemapButtons.entrySet()) {
+            String target = PadMapping.touchTarget(prefs, entry.getKey());
+            entry.getValue().setText("Touch " + PadMapping.touchLabel(entry.getKey())
+                    + " sends: " + PadMapping.targetLabel(target));
+        }
+        for (Map.Entry<String, Button> entry : padRemapButtons.entrySet()) {
+            String target = PadMapping.padTarget(prefs, entry.getKey());
+            entry.getValue().setText("Gamepad " + entry.getKey()
+                    + " sends: " + PadMapping.targetLabel(target));
+        }
+    }
+
+    // ------------------------------------------------------------------
+
+    private String readLog() {
+        File file = BootLog.file(this);
+        if (!file.exists())
+            return "(no boot log yet - start the game first)";
+        try {
+            FileInputStream in = new FileInputStream(file);
+            byte[] bytes = new byte[(int) Math.min(file.length(), 512 * 1024)];
+            int read = 0;
+            while (read < bytes.length) {
+                int n = in.read(bytes, read, bytes.length - read);
+                if (n < 0) break;
+                read += n;
+            }
+            in.close();
+            return new String(bytes, 0, read, "UTF-8");
+        } catch (Exception e) {
+            return "(could not read the boot log: " + e.getMessage() + ")";
+        }
+    }
+
+    private void refreshLogView() {
+        logView.setText(readLog());
+    }
+
+    private void refreshUi() {
+        if (copying) {
+            // The copy thread owns the status line while it runs.
+            status.setText(copyStatusText);
+            refreshLogView();
+            return;
+        }
+        String uri = storedIso();
+        if (uri.isEmpty()) {
+            status.setText("No ISO picked yet. Tap 1 to pick it, or 2 and you will be asked to pick first.");
+        } else if (copyReady()) {
+            status.setText("ISO picked and copied into the app. Tap 2 to start the game.");
+        } else {
+            status.setText("ISO picked. Tap 2: the ISO is copied into the app first (one time), then the game starts.");
+        }
+        refreshLogView();
+    }
+
+    private void shareLog() {
+        String text = readLog();
+        if (text.length() > 60000)
+            text = "...(log truncated for sharing)\n" + text.substring(text.length() - 60000);
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "godhand-boot.log");
+        intent.putExtra(Intent.EXTRA_TEXT, text);
+        startActivity(Intent.createChooser(intent, "Share boot log"));
+    }
+}
