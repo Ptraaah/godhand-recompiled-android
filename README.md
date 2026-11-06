@@ -19,6 +19,10 @@ The full story with device screenshots and boot-log numbers lives in [docs/PROGR
 
 The detailed roadmap lives in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## Downloads
+
+First public build is up on the [releases page](https://github.com/Ptraaah/godhand-recompiled-android/releases): v0.1.0-alpha. Two zips there — m33 is the newest build, m27 is the older, steadier fallback. Both are early alpha: they boot and play on a POCO F5, but crowds still drop frames and the audio stutters. You still need your own disc (next section) — the zips contain no game data.
+
 ## You need your own disc
 
 No game data is distributed here, and none ever will be. There is no disc image, no extracted game files, and no generated game code in this repository — the .gitignore blocks them on purpose, not just by policy.
