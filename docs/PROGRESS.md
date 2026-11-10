@@ -77,11 +77,11 @@ m38's verdict was still "very laggy in crowds, sound choppy" — so m39 started 
 
 Device verdict on m39, in my own words from the test: really good. Performance clearly better; sound better too, about 80% of the way there. Not a victory lap — a new baseline.
 
-## Chapter 7 — where it stands, and the controls rethink
+## Chapter 7 — where it stands, the controls rethink, and the first public release
 
-The game is playable on the reference phone. The release stays on hold while the polish continues; the standing fronts are sound (from ~80% to all the way) and crowd performance.
+The game is playable on the reference phone, and as of today it is public: v0.43-m42 is out on the releases page as a pre-release, and the project is open to contributors. Playable but still unstable is the honest label — busy areas still drop frames and the sound is still being pushed from ~80% to all the way. The standing fronts stay sound and crowd performance; they are now open fronts, worked in the open.
 
-The next build (m40) takes on the last emulator habit left in the app: the controls. A full PS2 pad cloned onto a touchscreen is too much — two sticks, a D-pad, four shoulders, buttons a phone fight never gives your thumbs time to find. So the controls are being redesigned the way a native Android brawler would design them, in three styles the player picks between:
+m40 took on the last emulator habit left in the app: the controls. A full PS2 pad cloned onto a touchscreen is too much — two sticks, a D-pad, four shoulders, buttons a phone fight never gives your thumbs time to find. So the controls were redesigned the way a native Android brawler would design them, in three styles the player picks between:
 
 - **Brawler Clean** — one move stick, a few big fixed fight buttons, dodge as a big pill whose direction follows the stick.
 - **Gesture Evade** — no dodge button and no right stick at all; flick the right side of the screen to dodge.
@@ -93,9 +93,13 @@ The next build (m40) takes on the last emulator habit left in the app: the contr
 
 ![Control mockup C — Radial Pro](images/controls-mockup-c.png)
 
-All three are being built into the app as a player-selectable control style — what fits one player's thumbs is not what fits another's, so the choice ships in the settings instead of being made for them. The same build adds a Player mode / Developer mode setting: Player mode is the clean, player-facing app; Developer mode shows the boot log and the technical surfaces. Player is the default.
+All three shipped in m40 as a player-selectable control style — what fits one player's thumbs is not what fits another's, so the choice sits in the settings instead of being made for them. The same build added the Player mode / Developer mode setting: Player mode is the clean, player-facing app; Developer mode shows the boot log and the technical surfaces. Player is the default.
 
 The full mapping tables — every PS2 function and where it lives in each style — are in [CONTROLS-DESIGN.md](CONTROLS-DESIGN.md). One design fact worth stating: God Hand has no guard button; defence on the PS2 was the right-stick dodge system, so in every style here the dodge gets the prominence, not an invented guard.
+
+Two smaller builds followed in the same day. m41 replaced the tiny pause pill in every style with one proper START button — players skip cutscenes with Start, so it cannot be an afterthought in a corner — and set the shipped defaults to the best known values: widescreen on, resolution at 1x, everything else audited and kept where the measurements put it. Defaults are fallbacks only; a saved choice always wins. m42 then made Player mode mean performance too: thread placement and disc prefetch switch on automatically at game start for the player (the stored Developer toggles are never rewritten — flip back to Developer and your own values rule again), and the move stick learned the run: push it fully forward and the character dashes on its own, the double flick synthesized once, no second flick from the player.
+
+That is the build that ships today. It was also this morning's test build on my own phone: the launcher reads Player mode, Brawler Clean, widescreen on, and the game boots to the title and plays with the new START button where a thumb expects it.
 
 ## The reports
 
@@ -117,8 +121,9 @@ Every step above has a full engineering report, published as written at the time
 - [PATH-THROUGHPUT](milestones/PATH-THROUGHPUT.md) · [PATH-THROUGHPUT-BUILD](milestones/PATH-THROUGHPUT-BUILD.md) · [M32-LOG-ANALYSIS](milestones/M32-LOG-ANALYSIS.md) · [PATH-CALLBACK-BUILD](milestones/PATH-CALLBACK-BUILD.md) · [M33-LOG-ANALYSIS](milestones/M33-LOG-ANALYSIS.md) · [CALLCOUNT-STEP0](milestones/CALLCOUNT-STEP0.md) · [PATH-STAGEPROG-STEP0](milestones/PATH-STAGEPROG-STEP0.md) · [PATH-CHARPROG-STEP0](milestones/PATH-CHARPROG-STEP0.md) — throughput, the callback diet, and the call-count step-0 gates, m32-m33
 - [M34-REPORT](milestones/M34-REPORT.md) · [M35-REPORT](milestones/M35-REPORT.md) · [M36-REPORT](milestones/M36-REPORT.md) · [M37-REPORT](milestones/M37-REPORT.md) · [M38-REPORT](milestones/M38-REPORT.md) — the rider, the funnel, residency (opened and closed), and the train merge; each with its log analysis alongside in the same folder
 - [M39-SHELL-REPORT](milestones/M39-SHELL-REPORT.md) · [M39-CORE-REPORT](milestones/M39-CORE-REPORT.md) · [M39-DELIVERY](milestones/M39-DELIVERY.md) — m39: native buttons and the redesign, the research-backed audio/GS fixes, and the combined delivery
+- [M40-CONTROLS-REPORT](milestones/M40-CONTROLS-REPORT.md) · [M41-STARTBTN-REPORT](milestones/M41-STARTBTN-REPORT.md) · [M42-PLAYERPERF-REPORT](milestones/M42-PLAYERPERF-REPORT.md) — m40-m42: the three selectable control styles and the two modes, the real START button and the defaults audit, Player-mode automatic performance and the auto-dash
 
 ## Ground rules that have not changed
 
 - No game data in this repo, ever. You bring your own legitimate US disc; the app verifies it by SHA-256 and refuses anything else.
-- Playable now, still polishing: m39 plays well on the reference phone, with sound at roughly 80% and crowd performance still being pushed. The release stays on hold until that polish lands; when the state changes, this page changes.
+- Playable now, still polishing: m42 plays on the reference phone, with sound at roughly 80% and crowd performance still being pushed. It shipped today (2026-11-11) as a public pre-release — playable, still unstable, labelled as both — and the project is open to contributors; when the state changes, this page changes.

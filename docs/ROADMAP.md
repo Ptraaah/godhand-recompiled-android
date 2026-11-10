@@ -80,15 +80,23 @@ The last emulator habits live in the app's own surfaces, and they go.
   redesigned ready-to-play launcher, an app icon of its own, plus the
   research-backed audio and graphics fixes. Device verdict: really
   good; sound about 80% of the way there, performance clearly better.
-- m40 (in progress): controls redesigned for a phone instead of cloned
-  from a PS2 pad — three phone-native styles (Brawler Clean, Gesture
-  Evade, Radial Pro) built in as a player-selectable setting, alongside
-  a Player mode / Developer mode switch (Player hides the technical
-  surfaces; Developer shows the boot log and the knobs). Sound and
-  crowd performance keep being pushed in the same round.
-- The release stays on hold until this milestone lands; these are the
-  last steps before the port is presented as a finished app rather than
-  a test build.
+- m40 (done): controls redesigned for a phone instead of cloned from a
+  PS2 pad — three phone-native styles (Brawler Clean, Gesture Evade,
+  Radial Pro) built in as a player-selectable setting, alongside a
+  Player mode / Developer mode switch (Player hides the technical
+  surfaces; Developer shows the boot log and the knobs).
+- m41 (done): one proper START button in every control style — Start is
+  the cutscene skip, not a corner pill — and the shipped defaults set
+  to the best known values (widescreen on, resolution 1x, the rest
+  audited).
+- m42 (done): Player mode runs the performance options automatically
+  (thread placement and disc prefetch on at game start, stored toggles
+  untouched), and a full forward push on the move stick dashes on its
+  own — no double flick.
+- Released: v0.43-m42 went out on 2026-11-11 as the first playable
+  public pre-release, and the project is open to contributors
+  (CONTRIBUTING.md). Playable, still unstable, help wanted — sound and
+  crowd performance are the standing fronts from here.
 
 ## Standing rules
 

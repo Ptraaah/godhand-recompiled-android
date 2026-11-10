@@ -8,12 +8,14 @@ There are Android builds of this game floating around, and they do run. The prob
 
 ## Status
 
-Current build: 0.40-m39. It plays on a real phone now — stated plainly, with the remaining distance stated just as plainly.
+Current build: 0.43-m42, out now as the first playable public pre-release. It plays on a real phone — stated plainly, with the remaining distance stated just as plainly: it is playable, it is not stable yet, and both halves of that sentence are true.
 
 - The full game code translates, links and boots on a POCO F5 from a real disc, and plays: fights, crowds, the works. Performance improved step by step across a long run of measured builds; sound is close — about 80% of the way there by my own ear — and both are still being pushed.
 - The renderer that won is Path B: the PCSX2 graphics core, bridged onto Vulkan/Android. The home-grown GPU renderer and a later native-renderer experiment were both measured on the device and set aside; the bridge is what ships.
-- m39 also rebuilt the app side of things: real native Android buttons instead of drawn ones, a redesigned ready-to-play launcher, and an app icon of its own.
-- In progress (m40): the controls stop copying a PS2 pad. Three phone-native control styles — Brawler Clean, Gesture Evade, Radial Pro — are being built as player-selectable options, because what fits one player's thumbs is not what fits another's. Sound and crowd performance keep getting pushed in the same round.
+- m39 rebuilt the app side of things: real native Android buttons instead of drawn ones, a redesigned ready-to-play launcher, and an app icon of its own — plus research-backed audio and graphics fixes under the hood.
+- m40 stopped copying a PS2 pad. The controls are now three phone-native styles — Brawler Clean, Gesture Evade, Radial Pro — and the player picks between them in the settings, because what fits one player's thumbs is not what fits another's. The same build added Player mode and Developer mode: Player is the clean game, Developer shows the boot log and the technical surfaces.
+- m41 gave every control style one proper START button (that is the cutscene skip — it cannot be a tiny pill in a corner), and set the shipped defaults to the tuned values: widescreen on, resolution 1x.
+- m42 makes Player mode run the performance options automatically — thread placement and disc prefetch are on for the player without opening a single toggle — and a full push forward on the move stick now dashes on its own, no double flick needed.
 
 The full story with device screenshots and boot-log numbers lives in [docs/PROGRESS.md](docs/PROGRESS.md).
 
@@ -21,7 +23,17 @@ The detailed roadmap lives in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Downloads
 
-First public build is up on the [releases page](https://github.com/Ptraaah/godhand-recompiled-android/releases): v0.1.0-alpha. Two zips there — m33 is the newest build, m27 is the older, steadier fallback. Both are early alpha: they boot and play on a POCO F5, but crowds still drop frames and the audio stutters. You still need your own disc (next section) — the zips contain no game data.
+Newest build: [v0.43-m42](https://github.com/Ptraaah/godhand-recompiled-android/releases/tag/v0.43-m42) on the releases page — the first playable public build. Download the zip, extract the APK, install it (it installs over m39/m40/m41 if you have them), pick your own disc image, play. It is marked as a pre-release because that is what it is: playable today, still unstable in busy areas, audio still being improved.
+
+The older v0.1.0-alpha (m33, with m27 as fallback) stays on the releases page for anyone who wants the earlier baseline. You still need your own disc (next section) — the downloads contain no game data.
+
+## Contributors welcome
+
+This is a one-person project and it is now open for help, plainly: the game plays, but it is still unstable, and I want it better than I can get it alone.
+
+Help is needed most with performance and audio tuning, testing on phones other than the one POCO F5 everything is measured on, feedback on the three control styles, and playtesting the later stages nobody has verified yet. The single most useful contribution is a bug report with a boot log attached: switch to Developer mode in the settings, play until it breaks, then Share boot log from the launcher and attach the file to your issue.
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) — how to get the build, how to report so it gets fixed, and where the front lines are. Issues labelled `help wanted` and `good first issue` are the ones to grab.
 
 ## You need your own disc
 
