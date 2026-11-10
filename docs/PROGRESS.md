@@ -1,4 +1,4 @@
-# Progress log — from first boot to the GPU renderer
+# Progress log — from first boot to a playable phone build
 
 The whole run, start to current state, with the numbers the phone actually produced. Device for everything: POCO F5 (Snapdragon 7+ Gen 2, Adreno 725), my only phone. Disc: my own US copy of God Hand (SLUS-21503), hash-verified by the app on every install. The detailed engineering reports for every step live in [docs/milestones](milestones/) — this page is the story they tell.
 
@@ -67,6 +67,36 @@ In-game, the guest completes only about 8-16 fields per 5-second window (menus: 
 
 The standing suspects are the per-field graphics work under real scene load: synchronous texture readbacks (each one can drain the whole GPU pipeline) and the compute rasterizer's throughput. The next build instruments the backend worker itself — fields, draws, raster time, readback counts and time, fence waits, worker load, per window — so the fix lands on the measured eater. That is the same method that found every wall so far: the disc cache, the fetch leg, the function table. Measure, then fix the thing that is actually slow.
 
+## Chapter 6 — ARUS, the bridge, and the call-count era
+
+The renderer story did not end with the home GPU backend. First came ARUS (0.23-m22), the adaptive GS pipeline: upload dedup, 2x2 block shading, async deferred readbacks and a bounded queue depth, under one master switch. Then the bigger bet — Path B: instead of growing the home renderer forever, bridge the PCSX2 graphics core itself onto Vulkan/Android and let a mature GS do the drawing. Eight bridge iterations (b1-b8) later it was the main renderer. A native-renderer experiment (m25) was measured on the phone, found worse — fence stalls of seconds, not milliseconds — and reverted without ceremony; m26 revived the best bridge recipe, m27 worked on the graphics pipeline.
+
+Then the long middle: m28 to m38 attacked the cost of the work itself. VU work joining, vblank scheduling, callback diets, a funnel fix, residency tuning (measured, then honestly closed after m37), and finally train merging in m38 — fewer, larger invocations of the graphics machinery instead of hundreds of small ones per field. Crowds climbed step by step: by m30, crowded scenes ran at roughly 42-58 fields per second where they had been 31-51. Every build was device-tested on the same phone, and every verdict is in the reports below, including the unflattering ones.
+
+m38's verdict was still "very laggy in crowds, sound choppy" — so m39 started from research instead of another guess: forum and emulator-community findings on PS2 audio stutter and God Hand settings, checked against this codebase one by one. What landed (0.40-m39): an async, non-blocking 48 kHz audio feed with a ~50 ms queue and the time-stretch bypassed; GS hardware readbacks switched off through a new bridge option (the control existed inside the PCSX2 config all along but was unreachable from this port); minimum blending; and the cheapest SPU2 mode (nearest interpolation, reverb off). Every one of those sits behind its own switch in the settings file, and the renderer stays forced to the bridge build so a stale settings file cannot poison the test. The same build rebuilt the app itself: native Android buttons (with a D-pad and L3/R3 the old overlay never had), a redesigned ready-to-play launcher, and an original fist icon.
+
+Device verdict on m39, in my own words from the test: really good. Performance clearly better; sound better too, about 80% of the way there. Not a victory lap — a new baseline.
+
+## Chapter 7 — where it stands, and the controls rethink
+
+The game is playable on the reference phone. The release stays on hold while the polish continues; the standing fronts are sound (from ~80% to all the way) and crowd performance.
+
+The next build (m40) takes on the last emulator habit left in the app: the controls. A full PS2 pad cloned onto a touchscreen is too much — two sticks, a D-pad, four shoulders, buttons a phone fight never gives your thumbs time to find. So the controls are being redesigned the way a native Android brawler would design them, in three styles the player picks between:
+
+- **Brawler Clean** — one move stick, a few big fixed fight buttons, dodge as a big pill whose direction follows the stick.
+- **Gesture Evade** — no dodge button and no right stick at all; flick the right side of the screen to dodge.
+- **Radial Pro** — fixed fight buttons plus one special hub: hold, swipe to a wedge, release, for roulette and the God Hand unleash.
+
+![Control mockup A — Brawler Clean](images/controls-mockup-a.png)
+
+![Control mockup B — Gesture Evade](images/controls-mockup-b.png)
+
+![Control mockup C — Radial Pro](images/controls-mockup-c.png)
+
+All three are being built into the app as a player-selectable control style — what fits one player's thumbs is not what fits another's, so the choice ships in the settings instead of being made for them. The same build adds a Player mode / Developer mode setting: Player mode is the clean, player-facing app; Developer mode shows the boot log and the technical surfaces. Player is the default.
+
+The full mapping tables — every PS2 function and where it lives in each style — are in [CONTROLS-DESIGN.md](CONTROLS-DESIGN.md). One design fact worth stating: God Hand has no guard button; defence on the PS2 was the right-stick dodge system, so in every style here the dodge gets the prominence, not an invented guard.
+
 ## The reports
 
 Every step above has a full engineering report, published as written at the time, wrong turns included:
@@ -77,8 +107,18 @@ Every step above has a full engineering report, published as written at the time
 - [AUDIT-M6](milestones/AUDIT-M6.md) · [M6](milestones/M6.md) · [M7](milestones/M7.md) · [M8](milestones/M8.md) — the cache, the audit, the acquitted suspects
 - [M9](milestones/M9.md) — the frame-split verdict on the CPU renderer
 - [M10](milestones/M10.md) · [M11](milestones/M11.md) · [M12](milestones/M12.md) — the GPU toggle, the EGL bring-up, the function-table wall
+- [M13](milestones/M13.md) · [M14](milestones/M14.md) · [M15](milestones/M15.md) · [M16](milestones/M16.md) — the renderer measured scene by scene
+- [M17](milestones/M17.md) · [M18](milestones/M18.md) · [M19](milestones/M19.md) — input and presentation work on the road to ARUS
+- [M20](milestones/M20.md) · [M21](milestones/M21.md) · [M22](milestones/M22.md) · [M23](milestones/M23.md) · [M24-GPU-COST](milestones/M24-GPU-COST.md) — ARUS 1.0 and the GPU cost audit
+- [PATH-B-SPIKE](milestones/PATH-B-SPIKE.md) · [PATH-B-B1](milestones/PATH-B-B1.md) · [PATH-B-B1B](milestones/PATH-B-B1B.md) · [PATH-B-B2](milestones/PATH-B-B2.md) · [PATH-B-B3](milestones/PATH-B-B3.md) · [PATH-B-B4](milestones/PATH-B-B4.md) · [PATH-B-B5](milestones/PATH-B-B5.md) · [PATH-B-B6](milestones/PATH-B-B6.md) · [PATH-B-B7](milestones/PATH-B-B7.md) · [PATH-BRIDGE-PIPELINE](milestones/PATH-BRIDGE-PIPELINE.md) — the PCSX2 GS bridge, spike through b7 and the pipeline work (the b0 scoping note is kept locally; it is mostly upstream licence archaeology)
+- [PATH-B5REVIVAL](milestones/PATH-B5REVIVAL.md) · [PATH-NATIVE-M25](milestones/PATH-NATIVE-M25.md) — the b5 revival (m26) and the native-renderer experiment that was measured and reverted (m25)
+- [PATH-PIPELINE-BUILD](milestones/PATH-PIPELINE-BUILD.md) · [PATH-VUJOIN](milestones/PATH-VUJOIN.md) · [PATH-VUJOIN-BUILD](milestones/PATH-VUJOIN-BUILD.md) · [PATH-VUJOIN2-BUILD](milestones/PATH-VUJOIN2-BUILD.md) · [M27-LOG-ANALYSIS](milestones/M27-LOG-ANALYSIS.md) · [M29-LOG-ANALYSIS](milestones/M29-LOG-ANALYSIS.md) — the pipeline and VU-join builds, m27-m29
+- [PATH-VBLANK](milestones/PATH-VBLANK.md) · [PATH-VBLANK-BUILD](milestones/PATH-VBLANK-BUILD.md) · [M30-LOG-ANALYSIS](milestones/M30-LOG-ANALYSIS.md) · [M31-LOG-ANALYSIS](milestones/M31-LOG-ANALYSIS.md) · [PATH-PRESENT](milestones/PATH-PRESENT.md) · [PATH-PRESENT-BUILD](milestones/PATH-PRESENT-BUILD.md) — vblank scheduling and the harvest, m30-m31
+- [PATH-THROUGHPUT](milestones/PATH-THROUGHPUT.md) · [PATH-THROUGHPUT-BUILD](milestones/PATH-THROUGHPUT-BUILD.md) · [M32-LOG-ANALYSIS](milestones/M32-LOG-ANALYSIS.md) · [PATH-CALLBACK-BUILD](milestones/PATH-CALLBACK-BUILD.md) · [M33-LOG-ANALYSIS](milestones/M33-LOG-ANALYSIS.md) · [CALLCOUNT-STEP0](milestones/CALLCOUNT-STEP0.md) · [PATH-STAGEPROG-STEP0](milestones/PATH-STAGEPROG-STEP0.md) · [PATH-CHARPROG-STEP0](milestones/PATH-CHARPROG-STEP0.md) — throughput, the callback diet, and the call-count step-0 gates, m32-m33
+- [M34-REPORT](milestones/M34-REPORT.md) · [M35-REPORT](milestones/M35-REPORT.md) · [M36-REPORT](milestones/M36-REPORT.md) · [M37-REPORT](milestones/M37-REPORT.md) · [M38-REPORT](milestones/M38-REPORT.md) — the rider, the funnel, residency (opened and closed), and the train merge; each with its log analysis alongside in the same folder
+- [M39-SHELL-REPORT](milestones/M39-SHELL-REPORT.md) · [M39-CORE-REPORT](milestones/M39-CORE-REPORT.md) · [M39-DELIVERY](milestones/M39-DELIVERY.md) — m39: native buttons and the redesign, the research-backed audio/GS fixes, and the combined delivery
 
 ## Ground rules that have not changed
 
 - No game data in this repo, ever. You bring your own legitimate US disc; the app verifies it by SHA-256 and refuses anything else.
-- Not playable yet: menus are smooth, the world renders, in-game frame production is the open fight. When that changes, this page changes.
+- Playable now, still polishing: m39 plays well on the reference phone, with sound at roughly 80% and crowd performance still being pushed. The release stays on hold until that polish lands; when the state changes, this page changes.

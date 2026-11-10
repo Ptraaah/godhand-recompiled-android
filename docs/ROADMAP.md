@@ -55,18 +55,40 @@ Make it an app a phone can run.
 The graphics chip is translated at runtime by design; performance lives
 or dies here.
 
-- Path taken: the runtime's own GS, brought to Android as an EGL
-  OpenGL ES 3.2 backend with its shaders translated from desktop GLSL at
-  load time. The CPU rasteriser path remains as the fallback and the
-  measurement baseline. The Vulkan/PCSX2 route was not needed.
-- Where it stands: title and menus run at a real 60 FPS on the GPU
-  backend and the 3D world renders; the open work is in-game frame
-  production under scene load (the guest completes ~1-3 new frames per
-  second there today), being instrumented per scene on the reference
-  phone, a Snapdragon 7+ Gen 2 (Adreno 725).
+- Paths taken, plural, because each was measured on the phone before
+  being believed: the runtime's own GS, brought to Android as an EGL
+  OpenGL ES 3.2 backend (title and menus at a real 60 FPS); ARUS, the
+  adaptive pipeline on top of it (upload dedup, 2x2 block shading, async
+  readbacks, bounded queue); and Path B — the PCSX2 graphics core bridged
+  onto Vulkan/Android. Path B is the one that ships: it won on the
+  device, not on paper. A native-renderer experiment (m25) was measured,
+  found worse, and reverted.
+- Where it stands: done as the main line. The game plays on the
+  reference phone (Snapdragon 7+ Gen 2, Adreno 725). What remains is
+  polish, measured the same way as everything before it: crowd
+  performance and sound, build by build (the call-count era, m28-m38,
+  then the research-backed audio/GS fixes in m39).
 - Testing debt stated openly: upstream verifies the game only through
   stage 3, on any platform. Stages 4 to the end get tested here, on the
   phone, as part of this milestone.
+
+## Milestone 4 — a native Android app, not an emulator shell
+
+The last emulator habits live in the app's own surfaces, and they go.
+
+- m39 (done): real native Android buttons instead of drawn ones, a
+  redesigned ready-to-play launcher, an app icon of its own, plus the
+  research-backed audio and graphics fixes. Device verdict: really
+  good; sound about 80% of the way there, performance clearly better.
+- m40 (in progress): controls redesigned for a phone instead of cloned
+  from a PS2 pad — three phone-native styles (Brawler Clean, Gesture
+  Evade, Radial Pro) built in as a player-selectable setting, alongside
+  a Player mode / Developer mode switch (Player hides the technical
+  surfaces; Developer shows the boot log and the knobs). Sound and
+  crowd performance keep being pushed in the same round.
+- The release stays on hold until this milestone lands; these are the
+  last steps before the port is presented as a finished app rather than
+  a test build.
 
 ## Standing rules
 

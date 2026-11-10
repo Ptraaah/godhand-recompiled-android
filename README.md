@@ -8,12 +8,12 @@ There are Android builds of this game floating around, and they do run. The prob
 
 ## Status
 
-Further along than it sounds, and still stated plainly: it boots and renders on a real phone, and it is not playable yet.
+Current build: 0.40-m39. It plays on a real phone now — stated plainly, with the remaining distance stated just as plainly.
 
-- The full game code translates, links and boots on a POCO F5 from a real disc: intro, logos, menus.
-- The original CPU renderer drew everything but ran the title screen at 1 FPS; measurement pinned the cost to its GS fetch/present leg (99-100% of frame time).
-- A GPU renderer now exists for Android where none did: EGL ES 3.2 context, desktop shaders translated to GLSL ES at load (9/9 validated), ES resolutions for the desktop-only GL entry points. Title and menus run at a real 60 FPS on it, and the 3D game world renders correctly through it.
-- The open wall is in-game frame production: under real scene load the guest completes only ~1-3 new frames per second, so gameplay looks frozen while menus fly. That is being instrumented and measured now, the same way the title wall was found.
+- The full game code translates, links and boots on a POCO F5 from a real disc, and plays: fights, crowds, the works. Performance improved step by step across a long run of measured builds; sound is close — about 80% of the way there by my own ear — and both are still being pushed.
+- The renderer that won is Path B: the PCSX2 graphics core, bridged onto Vulkan/Android. The home-grown GPU renderer and a later native-renderer experiment were both measured on the device and set aside; the bridge is what ships.
+- m39 also rebuilt the app side of things: real native Android buttons instead of drawn ones, a redesigned ready-to-play launcher, and an app icon of its own.
+- In progress (m40): the controls stop copying a PS2 pad. Three phone-native control styles — Brawler Clean, Gesture Evade, Radial Pro — are being built as player-selectable options, because what fits one player's thumbs is not what fits another's. Sound and crowd performance keep getting pushed in the same round.
 
 The full story with device screenshots and boot-log numbers lives in [docs/PROGRESS.md](docs/PROGRESS.md).
 
