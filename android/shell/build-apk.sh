@@ -33,9 +33,12 @@ if [ -n "${GODHAND_LIBS_DIR:-}" ]; then
     done
 fi
 
-# 3. Link the APK around the manifest, add dex + libs, page-align.
+# 3. Compile the resources (the manifest points at @mipmap/ic_launcher),
+#    link the APK around the manifest, add dex + libs, page-align.
+"$BT/aapt2" compile --dir "$HERE/res" -o "$WORK/compiled-res.zip"
 "$BT/aapt2" link -o "$WORK/unaligned.apk" -I "$ANDROID_JAR" \
-    --manifest "$HERE/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 35
+    --manifest "$HERE/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 35 \
+    "$WORK/compiled-res.zip"
 ( cd "$WORK/stage" && zip -q -0 -r "$WORK/unaligned.apk" classes.dex lib )
 "$BT/zipalign" -f -p 4 "$WORK/unaligned.apk" "$OUT"
 "$BT/aapt2" dump badging "$OUT" | head -4
