@@ -13,7 +13,9 @@ import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import android.util.StateSet;
+import android.view.Gravity;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -106,8 +108,11 @@ public class LauncherActivity extends Activity {
     private static final String[] OPACITY_VALUES = {"high", "medium", "low"};
     private static final String[] SIZE_VALUES = {"80", "90", "100", "110", "125", "140"};
 
-    private static final int COL_BG = Color.rgb(16, 16, 18);
-    private static final int COL_PANEL = Color.rgb(30, 30, 34);
+    private static final int COL_BG = Color.rgb(13, 14, 18);
+    private static final int COL_ACCENT = Color.rgb(255, 122, 26);
+    private static final int COL_ACCENT_DARK = Color.rgb(190, 84, 10);
+    private static final int COL_ROW = Color.rgb(38, 40, 48);
+    private static final int COL_PANEL = Color.rgb(27, 28, 36);
     private static final int COL_TEXT = Color.rgb(240, 240, 240);
     private static final int COL_STATUS = Color.rgb(255, 213, 79);
     private static final int COL_LOG = Color.rgb(204, 204, 204);
@@ -173,6 +178,66 @@ public class LauncherActivity extends Activity {
         return button;
     }
 
+    // ---- m39 ready-to-play design helpers --------------------------------
+    // One design language across the app: near-black background, dark
+    // panel cards with rounded corners, one accent (orange), big touch
+    // targets. EVERY view keeps explicit colours/sizes in code (the
+    // m2a/m2b lesson: no theme-dependent rendering).
+
+    private LinearLayout.LayoutParams rowParams(int heightDp) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(heightDp));
+        params.topMargin = dp(8);
+        return params;
+    }
+
+    private Button rowButton(LinearLayout parent, android.view.View.OnClickListener listener) {
+        Button row = makeButton("", COL_ROW);
+        row.setTextSize(14);
+        row.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), 0, dp(10), 0);
+        row.setLayoutParams(rowParams(52));
+        row.setOnClickListener(listener);
+        parent.addView(row);
+        return row;
+    }
+
+    private LinearLayout card(LinearLayout root, String titleText) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COL_PANEL);
+        bg.setCornerRadius(dp(14));
+        card.setBackground(bg);
+        card.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams.topMargin = dp(16);
+        card.setLayoutParams(cardParams);
+        TextView label = new TextView(this);
+        label.setText(titleText);
+        label.setTextSize(13);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setTextColor(COL_ACCENT);
+        card.addView(label);
+        root.addView(card);
+        return card;
+    }
+
+    private void updatePlayButton() {
+        if (startButton == null)
+            return;
+        if (copying)
+            startButton.setText("Copying ISO - please wait");
+        else if (storedIso().isEmpty())
+            startButton.setText("Pick an ISO to play");
+        else if (copyReady())
+            startButton.setText("PLAY");
+        else
+            startButton.setText("Copy ISO and play");
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -181,8 +246,6 @@ public class LauncherActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(COL_BG);
         final int pad = dp(16);
-        // Base padding already clears the status bar if insets never
-        // arrive; the listener replaces it with the exact insets.
         root.setPadding(pad, pad + statusBarHeight(), pad, pad);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             v.setPadding(
@@ -193,27 +256,96 @@ public class LauncherActivity extends Activity {
             return insets;
         });
 
+        // ---- Hero: the app icon (same asset as the launcher icon),
+        // name and version - a game header, not a debug tool.
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.HORIZONTAL);
+        hero.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable heroBg = new GradientDrawable();
+        heroBg.setColor(Color.rgb(24, 20, 18));
+        heroBg.setCornerRadius(dp(16));
+        heroBg.setStroke(dp(1), Color.rgb(92, 44, 10));
+        hero.setBackground(heroBg);
+        hero.setPadding(dp(16), dp(16), dp(16), dp(16));
+        ImageView icon = new ImageView(this);
+        int iconRes = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
+        if (iconRes != 0)
+            icon.setImageResource(iconRes);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(72), dp(72));
+        iconParams.rightMargin = dp(14);
+        icon.setLayoutParams(iconParams);
+        hero.addView(icon);
+        LinearLayout heroText = new LinearLayout(this);
+        heroText.setOrientation(LinearLayout.VERTICAL);
+        TextView eyebrow = new TextView(this);
+        eyebrow.setText("PTRAAA - RECOMPILED");
+        eyebrow.setTextSize(11);
+        eyebrow.setTypeface(Typeface.DEFAULT_BOLD);
+        eyebrow.setTextColor(COL_ACCENT);
+        heroText.addView(eyebrow);
         TextView title = new TextView(this);
-        title.setText("God Hand — recompiled (0.19-m18)");
-        title.setTextSize(20);
+        title.setText("GOD HAND");
+        title.setTextSize(30);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(COL_TEXT);
-        root.addView(title);
+        heroText.addView(title);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Ready to play on your phone");
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(COL_LOG);
+        heroText.addView(subtitle);
+        TextView version = new TextView(this);
+        version.setText("Version 0.40-m39");
+        version.setTextSize(11);
+        version.setTextColor(COL_ACCENT);
+        heroText.addView(version);
+        hero.addView(heroText);
+        root.addView(hero);
 
+        // ---- Status card: where the ISO stands, in one clean card.
+        TextView statusLabel = new TextView(this);
+        statusLabel.setText("GAME STATUS");
+        statusLabel.setTextSize(12);
+        statusLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        statusLabel.setTextColor(COL_LOG);
+        LinearLayout.LayoutParams statusLabelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusLabelParams.topMargin = dp(18);
+        statusLabel.setLayoutParams(statusLabelParams);
+        root.addView(statusLabel);
         status = new TextView(this);
         status.setTextSize(14);
         status.setTextColor(COL_STATUS);
-        status.setBackgroundColor(COL_PANEL);
-        status.setPadding(dp(12), dp(10), dp(12), dp(10));
-        status.setMinHeight(dp(48));
+        GradientDrawable statusBg = new GradientDrawable();
+        statusBg.setColor(COL_PANEL);
+        statusBg.setCornerRadius(dp(14));
+        statusBg.setStroke(dp(1), Color.rgb(92, 44, 10));
+        status.setBackground(statusBg);
+        status.setPadding(dp(14), dp(12), dp(14), dp(12));
+        status.setMinHeight(dp(52));
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        statusParams.topMargin = dp(10);
+        statusParams.topMargin = dp(8);
         status.setLayoutParams(statusParams);
         root.addView(status);
 
-        pickButton = makeButton("1. Pick your God Hand (USA) ISO", COL_PICK);
+        // ---- The one big primary action. Its label follows the ISO
+        // state (updatePlayButton); the behaviour is the unchanged
+        // onStartPressed flow: pick first if needed, copy if needed,
+        // then launch.
+        startButton = makeButton("PLAY", COL_ACCENT);
+        startButton.setTextSize(21);
+        startButton.setTypeface(Typeface.DEFAULT_BOLD);
+        startButton.setLayoutParams(rowParams(72));
+        startButton.setOnClickListener(v -> onStartPressed());
+        root.addView(startButton);
+
+        // ---- Secondary: picking the ISO by hand.
+        pickButton = makeButton("Pick God Hand (USA) ISO", COL_PLAIN);
+        pickButton.setTextSize(15);
+        pickButton.setLayoutParams(rowParams(54));
         pickButton.setOnClickListener(v -> {
             if (copying) {
                 status.setText("ISO copy in progress - please wait for it to finish.");
@@ -225,74 +357,69 @@ public class LauncherActivity extends Activity {
         });
         root.addView(pickButton);
 
-        startButton = makeButton("2. Start the game", COL_START);
-        startButton.setOnClickListener(v -> onStartPressed());
-        root.addView(startButton);
-
-        // Milestone 8: Share boot log lives at the TOP of the page, right
-        // under Start - the button the owner needs after every test run
-        // must never depend on scrolling (it used to sit at the very
-        // bottom, below both remap sections).
-        Button share = makeButton("Share boot log", COL_PLAIN);
-        share.setOnClickListener(v -> shareLog());
-        root.addView(share);
-
-        // ---- Settings (Milestone 5): big cycle buttons; every tap saves
-        // at once and applies the next time the game starts.
-        root.addView(sectionTitle("Settings"));
-        scaleButton = addRow(root, v -> {
+        // ---- Settings, grouped into cards by subject.
+        LinearLayout perfCard = card(root, "PERFORMANCE");
+        scaleButton = rowButton(perfCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             String next = nextOf(SCALE_VALUES, prefs.getString(KEY_SET_SCALE, "1"));
             prefs.edit().putString(KEY_SET_SCALE, next).apply();
             refreshSettingsButtons();
         });
-        fpsButton = addRow(root, v -> {
-            SharedPreferences prefs = settingsPrefs();
-            prefs.edit().putBoolean(KEY_SET_FPS, !prefs.getBoolean(KEY_SET_FPS, true)).apply();
-            refreshSettingsButtons();
-        });
-        threadsButton = addRow(root, v -> {
+        threadsButton = rowButton(perfCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             prefs.edit().putBoolean(KEY_SET_THREADS, !prefs.getBoolean(KEY_SET_THREADS, false)).apply();
             refreshSettingsButtons();
         });
-        vsyncButton = addRow(root, v -> {
-            SharedPreferences prefs = settingsPrefs();
-            prefs.edit().putBoolean(KEY_SET_VSYNC, !prefs.getBoolean(KEY_SET_VSYNC, true)).apply();
-            refreshSettingsButtons();
-        });
-        prefetchButton = addRow(root, v -> {
+        prefetchButton = rowButton(perfCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             prefs.edit().putBoolean(KEY_SET_PREFETCH, !prefs.getBoolean(KEY_SET_PREFETCH, false)).apply();
             refreshSettingsButtons();
         });
-        gpuButton = addRow(root, v -> {
+        gpuButton = rowButton(perfCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             prefs.edit().putBoolean(KEY_SET_GPU, !prefs.getBoolean(KEY_SET_GPU, false)).apply();
             refreshSettingsButtons();
         });
-        wideButton = addRow(root, v -> {
+
+        LinearLayout displayCard = card(root, "DISPLAY AND BUTTONS");
+        fpsButton = rowButton(displayCard, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_FPS, !prefs.getBoolean(KEY_SET_FPS, true)).apply();
+            refreshSettingsButtons();
+        });
+        vsyncButton = rowButton(displayCard, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            prefs.edit().putBoolean(KEY_SET_VSYNC, !prefs.getBoolean(KEY_SET_VSYNC, true)).apply();
+            refreshSettingsButtons();
+        });
+        wideButton = rowButton(displayCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             prefs.edit().putBoolean(KEY_SET_WIDE, !prefs.getBoolean(KEY_SET_WIDE, false)).apply();
             refreshSettingsButtons();
         });
-        opacityButton = addRow(root, v -> {
+        opacityButton = rowButton(displayCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             String next = nextOf(OPACITY_VALUES, prefs.getString(KEY_SET_OPACITY, "high"));
             prefs.edit().putString(KEY_SET_OPACITY, next).apply();
             refreshSettingsButtons();
         });
-        sizeButton = addRow(root, v -> {
+        sizeButton = rowButton(displayCard, v -> {
             SharedPreferences prefs = settingsPrefs();
             String next = nextOf(SIZE_VALUES, prefs.getString(KEY_SET_BTNSIZE, "100"));
             prefs.edit().putString(KEY_SET_BTNSIZE, next).apply();
             refreshSettingsButtons();
         });
-        Button resetLayoutButton = makeButton("Reset button layout", COL_PLAIN);
+
+        LinearLayout controlsCard = card(root, "CONTROLS - BUTTON LAYOUT");
+        Button resetLayoutButton = makeButton("Reset button layout", COL_ROW);
+        resetLayoutButton.setTextSize(14);
+        resetLayoutButton.setLayoutParams(rowParams(52));
         resetLayoutButton.setOnClickListener(v -> {
             SharedPreferences.Editor editor = settingsPrefs().edit();
             String[] ids = {"stick_left", "stick_right",
                     "btn_triangle", "btn_circle", "btn_cross", "btn_square",
+                    "btn_dpad_up", "btn_dpad_down", "btn_dpad_left", "btn_dpad_right",
+                    "btn_l3", "btn_r3",
                     "btn_l1", "btn_l2", "btn_r1", "btn_r2", "btn_start", "btn_select"};
             for (String id : ids) {
                 editor.remove("lay_" + id + "_x");
@@ -302,38 +429,47 @@ public class LauncherActivity extends Activity {
             status.setText("Button layout reset - the game will use the default positions. "
                     + "In the game, the EDIT button (top centre) moves the buttons.");
         });
-        root.addView(resetLayoutButton);
+        controlsCard.addView(resetLayoutButton);
         TextView editHint = new TextView(this);
         editHint.setText("Move buttons: in the game, tap EDIT at the top, drag the buttons where you want them, tap DONE.");
         editHint.setTextSize(13);
         editHint.setTextColor(COL_LOG);
-        root.addView(editHint);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        hintParams.topMargin = dp(8);
+        editHint.setLayoutParams(hintParams);
+        controlsCard.addView(editHint);
         refreshSettingsButtons();
 
-        // ---- Remap (Milestone 5): what each button sends.
-        root.addView(sectionTitle("Remap touch buttons"));
+        // ---- Remap cards, below settings in visual priority.
+        LinearLayout touchCard = card(root, "REMAP TOUCH BUTTONS");
         for (String control : PadMapping.TOUCH_CONTROLS) {
             final String id = control;
-            Button row = addRow(root, v -> {
+            Button row = rowButton(touchCard, v -> {
                 SharedPreferences prefs = settingsPrefs();
                 String next = PadMapping.nextTarget(PadMapping.touchTarget(prefs, id));
                 prefs.edit().putString(PadMapping.prefKeyTouch(id), next).apply();
                 refreshRemapButtons();
             });
+            row.setTextSize(13);
             touchRemapButtons.put(id, row);
         }
-        root.addView(sectionTitle("Remap gamepad buttons"));
+        LinearLayout padCard = card(root, "REMAP GAMEPAD BUTTONS");
         for (String key : PadMapping.PAD_KEYS) {
             final String id = key;
-            Button row = addRow(root, v -> {
+            Button row = rowButton(padCard, v -> {
                 SharedPreferences prefs = settingsPrefs();
                 String next = PadMapping.nextTarget(PadMapping.padTarget(prefs, id));
                 prefs.edit().putString(PadMapping.prefKeyPad(id), next).apply();
                 refreshRemapButtons();
             });
+            row.setTextSize(13);
             padRemapButtons.put(id, row);
         }
         Button resetMappingButton = makeButton("Reset mapping", COL_PLAIN);
+        resetMappingButton.setTextSize(14);
+        resetMappingButton.setLayoutParams(rowParams(50));
         resetMappingButton.setOnClickListener(v -> {
             SharedPreferences.Editor editor = settingsPrefs().edit();
             for (String control : PadMapping.TOUCH_CONTROLS)
@@ -347,9 +483,25 @@ public class LauncherActivity extends Activity {
         root.addView(resetMappingButton);
         refreshRemapButtons();
 
-        Button refresh = makeButton("Reload boot log", COL_PLAIN);
+        // ---- Boot log: a quiet developer detail at the very bottom,
+        // with Share / Reload as small secondary buttons.
+        LinearLayout logCard = card(root, "BOOT LOG - DEVELOPER DETAIL");
+        LinearLayout logActions = new LinearLayout(this);
+        logActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button share = makeButton("Share boot log", COL_ROW);
+        share.setTextSize(13);
+        LinearLayout.LayoutParams shareParams = new LinearLayout.LayoutParams(
+                0, dp(46), 1f);
+        shareParams.rightMargin = dp(8);
+        share.setLayoutParams(shareParams);
+        share.setOnClickListener(v -> shareLog());
+        logActions.addView(share);
+        Button refresh = makeButton("Reload boot log", COL_ROW);
+        refresh.setTextSize(13);
+        refresh.setLayoutParams(new LinearLayout.LayoutParams(0, dp(46), 1f));
         refresh.setOnClickListener(v -> refreshUi());
-        root.addView(refresh);
+        logActions.addView(refresh);
+        logCard.addView(logActions);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Color.BLACK);
@@ -359,18 +511,12 @@ public class LauncherActivity extends Activity {
         logView.setTextColor(COL_LOG);
         logView.setPadding(dp(8), dp(8), dp(8), dp(8));
         scroll.addView(logView);
-        // Milestone 8: the pane can no longer take "the rest of the page"
-        // by weight - inside the page ScrollView below there is no fixed
-        // rest. It gets a fixed height instead and keeps its own scroll
-        // for the log text; the page scrolls around it.
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(260));
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(220));
         scrollParams.topMargin = dp(10);
-        root.addView(scroll, scrollParams);
+        logCard.addView(scroll, scrollParams);
 
-        // Milestone 8: the whole page scrolls (see the class comment).
-        // The root keeps its own padding and insets listener; the
-        // ScrollView just carries it.
+        // The whole page scrolls (Milestone 8).
         ScrollView page = new ScrollView(this);
         page.setBackgroundColor(COL_BG);
         page.setFillViewport(true);
@@ -381,7 +527,7 @@ public class LauncherActivity extends Activity {
         page.addView(root);
         setContentView(page);
         root.requestApplyInsets();
-        BootLog.append(this, "launcher opened (0.19-m18)");
+        BootLog.append(this, "launcher opened (0.40-m39)");
         refreshUi();
     }
 
@@ -662,12 +808,12 @@ public class LauncherActivity extends Activity {
                         launchGame();
                     } else {
                         status.setText("ISO copy done (" + mb(totalCopied)
-                                + " MB). Tap 2 to start the game.");
+                                + " MB). Tap PLAY to start the game.");
                     }
                 } else {
                     BootLog.append(LauncherActivity.this, "iso copy FAILED after "
                             + totalCopied + " bytes: " + failText);
-                    status.setText("ISO copy failed: " + failText + " Tap 2 to try again.");
+                    status.setText("ISO copy failed: " + failText + " Tap PLAY to try again.");
                 }
                 refreshLogView();
             });
@@ -769,6 +915,7 @@ public class LauncherActivity extends Activity {
 
     private void refreshLogView() {
         logView.setText(readLog());
+        updatePlayButton();
     }
 
     private void refreshUi() {
@@ -780,11 +927,11 @@ public class LauncherActivity extends Activity {
         }
         String uri = storedIso();
         if (uri.isEmpty()) {
-            status.setText("No ISO picked yet. Tap 1 to pick it, or 2 and you will be asked to pick first.");
+            status.setText("No ISO yet. Tap PLAY and you will be asked to pick it first.");
         } else if (copyReady()) {
-            status.setText("ISO picked and copied into the app. Tap 2 to start the game.");
+            status.setText("Ready to play. Your ISO is inside the app.");
         } else {
-            status.setText("ISO picked. Tap 2: the ISO is copied into the app first (one time), then the game starts.");
+            status.setText("ISO picked. Tap PLAY: the ISO is copied into the app first (one time), then the game starts.");
         }
         refreshLogView();
     }

@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.ptraaa.godhand"
-    android:versionCode="33"
-    android:versionName="0.26-m25">
+    android:versionCode="47"
+    android:versionName="0.40-m39">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
     <application
         android:label="God Hand (recompiled)"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:hasCode="true">
         <activity

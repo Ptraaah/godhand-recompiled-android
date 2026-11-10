@@ -191,8 +191,8 @@ public class GameActivity extends NativeActivity {
         params.gravity = Gravity.TOP | Gravity.LEFT;
         try {
             windowManager.addView(overlay, params);
-            BootLog.append(this, "touch overlay added (0.19-m18) in its own window above the game surface: "
-                    + "two sticks, face buttons, L1/L2/R1/R2, start/select, EDIT pill"
+            BootLog.append(this, "touch overlay added (0.40-m39) in its own window above the game surface: "
+                    + "two sticks, D-pad, face buttons, L1/L2/R1/R2, L3/R3, start/select, native EDIT button"
                     + (fpsOn ? ", FPS label on" : ""));
             // One layout line with every control's bounds (see TouchOverlay.describeLayout).
             overlay.getViewTreeObserver().addOnGlobalLayoutListener(
@@ -201,7 +201,7 @@ public class GameActivity extends NativeActivity {
                         public void onGlobalLayout() {
                             overlay.getViewTreeObserver().removeOnGlobalLayoutListener(this);
                             BootLog.append(GameActivity.this,
-                                    "overlay layout (0.19-m18): " + overlay.describeLayout());
+                                    "overlay layout (0.40-m39): " + overlay.describeLayout());
                         }
                     });
         } catch (Throwable t) {

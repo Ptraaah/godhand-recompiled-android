@@ -35,14 +35,20 @@ public final class PadMapping {
     public static final String[] TOUCH_CONTROLS = {
             "btn_triangle", "btn_circle", "btn_cross", "btn_square",
             "btn_l1", "btn_l2", "btn_r1", "btn_r2", "btn_start", "btn_select",
+            "btn_dpad_up", "btn_dpad_down", "btn_dpad_left", "btn_dpad_right",
+            "btn_l3", "btn_r3",
     };
     private static final String[] TOUCH_LABELS = {
             "Triangle button", "Circle button", "Cross button", "Square button",
             "L1 button", "L2 button", "R1 button", "R2 button", "Start button", "Select button",
+            "D-pad up button", "D-pad down button", "D-pad left button", "D-pad right button",
+            "L3 button", "R3 button",
     };
     private static final String[] TOUCH_DEFAULTS = {
             "TRIANGLE", "CIRCLE", "CROSS", "SQUARE",
             "L1", "L2", "R1", "R2", "START", "SELECT",
+            "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT",
+            "L3", "R3",
     };
 
     // Remappable physical-gamepad buttons (the D-pad and sticks are fixed).

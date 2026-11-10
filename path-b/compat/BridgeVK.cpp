@@ -46,6 +46,14 @@
 // so it is guarded by g_captureMutex below. PS2X_GS_PIPELINE=0 restores the
 // direct synchronous calls (the reconstructed base behaviour) in the same
 // binary; PS2X_GS_PIPELINE_DEPTH=n sets the field bound (default 2).
+//
+// Harvest fastpath (PATH-PRESENT.md): with PS2X_GS_HARVEST_FASTPATH on
+// (the default), the grab serves the freshest materialized capture
+// directly from its ring slot — the serve cache keeps only metadata and
+// the slot -> serve-cache copy is gone — and capture materialization
+// (the staging -> slot copy) runs only on the bridge thread inside
+// CaptureFrame; the grab path only checks fences. =0 restores the
+// staged serve below verbatim.
 #include "pcsx2gs_api.h"
 #include "pcsx2gs_host.h"
 
@@ -97,6 +105,7 @@ namespace
         u64 fence = 0;        // device fence counter that completes the copy
         uint32_t vsync = 0;   // bridge vsync count this capture belongs to
         bool pending = false; // copy recorded, fence not yet observed complete
+        bool fenceDone = false; // fence observed complete, pixels not yet copied out
         bool ready = false;   // pixels copied out to `pixels`
         std::vector<u32> pixels;
     };
@@ -122,22 +131,51 @@ namespace
     uint32_t g_vsync_count = 0;
     uint32_t g_grab_vsync = 0;
     bool g_grab_valid = false;
+    size_t g_grab_slot = 0; // fastpath only: the ring slot the g_grab_* metadata pins
 
-    // Moves every capture whose copy fence has completed into its CPU pixel
-    // buffer. Poll-only: the device's command-buffer rotation keeps
-    // GetCompletedFenceCounter() current, so this never submits and never
-    // waits. Caller holds g_captureMutex.
-    void PollCapturesLocked()
+    // Harvest fastpath gate (PATH-PRESENT.md §3): default on;
+    // PS2X_GS_HARVEST_FASTPATH=0 restores the pre-fastpath serve verbatim
+    // (serve-cache copy in RefreshServeLocked, grab-side materialization
+    // through PollCapturesLocked).
+    bool HarvestFastPathEnabled()
+    {
+        static const bool enabled = []
+        {
+            const char *value = std::getenv("PS2X_GS_HARVEST_FASTPATH");
+            return !value || !*value || *value != '0';
+        }();
+        return enabled;
+    }
+
+    // Cheap fence check: marks every pending capture whose copy fence has
+    // completed. No copies, no submits, no waits: the device's
+    // command-buffer rotation keeps GetCompletedFenceCounter() current.
+    // Any thread may run this under g_captureMutex; on the fastpath it is
+    // all the grab path ever does about capture completion.
+    void CheckCaptureFencesLocked()
     {
         GSDeviceVK *device = GSDeviceVK::GetInstance();
         if (!device)
             return;
         const u64 completed = device->GetCompletedFenceCounter();
         for (CaptureSlot &slot : g_captures)
+            if (slot.pending && completed >= slot.fence)
+                slot.fenceDone = true;
+    }
+
+    // Materialization: the staging -> slot.pixels copy for every capture
+    // the fence check has marked complete. On the fastpath only
+    // CaptureFrame (bridge thread) runs this; the pre-fastpath serve also
+    // reaches it through PollCapturesLocked below. Caller holds
+    // g_captureMutex.
+    void MaterializeCapturesLocked()
+    {
+        for (CaptureSlot &slot : g_captures)
         {
-            if (!slot.pending || completed < slot.fence)
+            if (!slot.pending || !slot.fenceDone)
                 continue;
             slot.pending = false;
+            slot.fenceDone = false;
             // The fence already completed, so Flush() takes its early return
             // (no submit, no wait); Map() then only invalidates the host cache.
             slot.download->Flush();
@@ -152,6 +190,16 @@ namespace
                             slot.width * sizeof(u32));
             slot.ready = true;
         }
+    }
+
+    // Moves every capture whose copy fence has completed into its CPU pixel
+    // buffer: the fence check and materialization composed, exactly the
+    // pre-fastpath behaviour. Poll-only: this never submits and never
+    // waits. Caller holds g_captureMutex.
+    void PollCapturesLocked()
+    {
+        CheckCaptureFencesLocked();
+        MaterializeCapturesLocked();
     }
 
     // Records a snapshot of the device's current (just-merged) texture into
@@ -227,6 +275,7 @@ namespace
         slot.fence = device->GetCurrentFenceCounter();
         slot.vsync = g_vsync_count;
         slot.pending = true;
+        slot.fenceDone = false;
         slot.ready = false;
         g_capture_next = (g_capture_next + 1) % kCaptureSlotCount;
         // Submit now, without waiting: the copy executes while the next
@@ -249,6 +298,7 @@ namespace
                 device->Recycle(slot.target);
             slot.target = nullptr;
             slot.pending = false;
+            slot.fenceDone = false;
             slot.ready = false;
             slot.pixels.clear();
         }
@@ -266,6 +316,7 @@ namespace
         for (CaptureSlot &slot : g_captures)
         {
             slot.pending = false;
+            slot.fenceDone = false;
             slot.ready = false;
         }
         g_grab_valid = false;
@@ -285,6 +336,40 @@ namespace
         if (best && (!g_grab_valid || best->vsync != g_grab_vsync))
         {
             g_grab_pixels = best->pixels;
+            g_grab_width = best->width;
+            g_grab_height = best->height;
+            g_grab_vsync = best->vsync;
+            g_grab_valid = true;
+        }
+        return g_grab_valid ? g_grab_vsync : 0;
+    }
+
+    // Fastpath serve staging: pins the freshest materialized capture by
+    // ring index and keeps only its metadata in the g_grab_* state — the
+    // pixels stay in the slot and the copy call reads them there, so the
+    // slot -> serve-cache copy above is skipped. Only a strictly newer
+    // capture re-pins; when nothing newer has materialized, the previous
+    // pin keeps serving (the fastpath twin of the staged cache serving
+    // the previous frame), and when nothing has materialized at all the
+    // not-ready case is RefreshServeLocked's: 0. Caller holds
+    // g_captureMutex.
+    uint32_t RefreshServeFastLocked()
+    {
+        CheckCaptureFencesLocked();
+        const CaptureSlot *best = nullptr;
+        size_t bestIndex = 0;
+        for (size_t i = 0; i < kCaptureSlotCount; ++i)
+        {
+            const CaptureSlot &slot = g_captures[i];
+            if (slot.ready && (!best || slot.vsync > best->vsync))
+            {
+                best = &slot;
+                bestIndex = i;
+            }
+        }
+        if (best && (!g_grab_valid || best->vsync > g_grab_vsync))
+        {
+            g_grab_slot = bestIndex;
             g_grab_width = best->width;
             g_grab_height = best->height;
             g_grab_vsync = best->vsync;
@@ -353,6 +438,18 @@ namespace
                 options.PrecacheTextureReplacements = value != 0;
             else if (key == "blending")
                 options.AccurateBlendingUnit = static_cast<AccBlendLevel>(std::clamp(value, 0, 5));
+            // M39 (godhand docs/M39-CORE-REPORT.md): the hardware download mode, previously
+            // unreachable from the port (GSOptions kept its Enabled/accurate default, so every
+            // renderer-internal framebuffer download stayed synchronous). Values are
+            // GSHardwareDownloadMode: 0 Enabled, 1 EnabledForceFull, 2 NoReadbacks,
+            // 3 Unsynchronized, 4 Disabled. The port ships 2 (NoReadbacks).
+            else if (key == "hw_download")
+                options.HWDownloadMode = static_cast<GSHardwareDownloadMode>(std::clamp(value, 0, 4));
+            // M39: texture preloading level (0 Off, 1 Partial, 2 Full). GSOptions already
+            // defaults to Full; the key exists so the resolved value is explicit in the
+            // open line's options string.
+            else if (key == "texture_preloading")
+                options.TexturePreloading = static_cast<TexturePreloadingLevel>(std::clamp(value, 0, 2));
         }
     }
 
@@ -394,6 +491,8 @@ namespace
         GSgetInternalResolution(&w, &h);
         std::fprintf(stderr, "[pcsx2-gs] Vulkan surfaceless, scale %.0f (%dx%d), surface %ux%u, options: %s\n", options.UpscaleMultiplier, w, h,
                      g_window.surface_width, g_window.surface_height, params->options ? params->options : "");
+        std::fprintf(stderr, "[pcsx2-gs] harvest fastpath: %s (PS2X_GS_HARVEST_FASTPATH=0 restores the staged serve)\n",
+                     HarvestFastPathEnabled() ? "on" : "off");
         // Which renderer paths the feature negotiation picked on this driver.
         if (GSDeviceVK *device = GSDeviceVK::GetInstance())
         {
@@ -972,6 +1071,12 @@ extern "C" __attribute__((visibility("default"))) void pcsx2gs_set_aspect(uint32
 // staged frame and reports the needed byte count; the copy call that
 // follows serves exactly that staged frame. Returns 0 when no capture has
 // completed yet.
+//
+// Harvest fastpath form (default; PS2X_GS_HARVEST_FASTPATH=0 restores the
+// staged serve above): the size query pins the freshest materialized
+// capture's slot and metadata, the copy call memcpys out of that slot,
+// and materialization happens only inside CaptureFrame on the bridge
+// thread — the grab side never copies staging into a slot itself.
 extern "C" __attribute__((visibility("default"))) uint32_t pcsx2gs_grab_frame2(uint8_t *dst, uint32_t capacity, uint32_t *width, uint32_t *height, uint32_t *counter)
 {
     if (!g_open)
@@ -979,6 +1084,45 @@ extern "C" __attribute__((visibility("default"))) uint32_t pcsx2gs_grab_frame2(u
     // Stage B8: the capture state is written by the bridge thread now; the
     // whole serve (refresh + read + copy) runs under the capture mutex.
     std::lock_guard<std::mutex> lock(g_captureMutex);
+    if (HarvestFastPathEnabled())
+    {
+        // Fastpath serve: the copy call reads the pinned slot in place;
+        // no serve-cache copy, and materialization stays on the bridge
+        // thread (the refresh above only checks fences).
+        if (!dst)
+            RefreshServeFastLocked();
+        if (!g_grab_valid)
+            return 0;
+        // The pin stays truthful while the slot is untouched (ready,
+        // same vsync) or merely re-recorded (new vsync, not ready): a
+        // slot's pixels are only overwritten by materializing a newer
+        // capture into it, which flips it back to ready under its new
+        // vsync in the same locked step. Anything else means the pinned
+        // frame's pixels are gone; re-pin to the freshest materialized
+        // capture and serve that instead.
+        const CaptureSlot &pinned = g_captures[g_grab_slot];
+        const bool pinIntact = (pinned.vsync == g_grab_vsync) ? pinned.ready : !pinned.ready;
+        if (!pinIntact)
+        {
+            RefreshServeFastLocked();
+            if (!g_grab_valid)
+                return 0;
+            const CaptureSlot &repinned = g_captures[g_grab_slot];
+            if (!repinned.ready || repinned.vsync != g_grab_vsync)
+                return 0;
+        }
+        const CaptureSlot &slot = g_captures[g_grab_slot];
+        const uint32_t bytes = g_grab_width * g_grab_height * 4u;
+        if (width)
+            *width = g_grab_width;
+        if (height)
+            *height = g_grab_height;
+        if (counter)
+            *counter = g_grab_vsync;
+        if (dst && capacity >= bytes)
+            std::memcpy(dst, slot.pixels.data(), bytes);
+        return bytes;
+    }
     if (!dst)
         RefreshServeLocked();
     if (!g_grab_valid)
