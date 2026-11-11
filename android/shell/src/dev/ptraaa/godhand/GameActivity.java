@@ -150,13 +150,16 @@ public class GameActivity extends NativeActivity {
         IsoHolder.optDiscPrefetch = (!developerMode
                 || prefs.getBoolean(LauncherActivity.KEY_SET_PREFETCH, false)) ? "on" : "off";
         // Milestone 10: GPU renderer, owner-controlled, default off.
-        // m42: deliberately NOT forced in Player mode - this toggle is
-        // an alternate experimental renderer (its GL context creation
-        // is Windows-only in this tree), not a performance booster on
-        // the shipped bridge path, and forcing it could switch
-        // players off the fast path. It follows the stored value in
-        // both modes, exactly as m41.
-        IsoHolder.optGpuRenderer = prefs.getBoolean(LauncherActivity.KEY_SET_GPU, false) ? "on" : "off";
+        // m42: deliberately NOT forced in Player mode - it follows
+        // the stored value in both modes, exactly as m41.
+        // m47: the unset-preference fallback is now ON. The shipped
+        // default renderer flipped from the bridge to the built-in
+        // GS (the glue's compiled-in seed), and on the native path
+        // this toggle is the real backend choice: on runs the ARUS
+        // GPU backend, off is the explicit CPU-backend fallback.
+        // Only the fallback changed - a saved owner value is read
+        // back exactly as stored, as m41 did for widescreen.
+        IsoHolder.optGpuRenderer = prefs.getBoolean(LauncherActivity.KEY_SET_GPU, true) ? "on" : "off";
         // Path B stage B6: widescreen 16:9, owner-controlled. Stage B7
         // made it default OFF (owner opt-in); m41 makes it default ON
         // (Pablo's order: true 16:9 is the shipped default). Only the

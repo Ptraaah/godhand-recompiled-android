@@ -407,7 +407,7 @@ public class LauncherActivity extends Activity {
         });
         gpuButton = rowButton(perfCard, v -> {
             SharedPreferences prefs = settingsPrefs();
-            prefs.edit().putBoolean(KEY_SET_GPU, !prefs.getBoolean(KEY_SET_GPU, false)).apply();
+            prefs.edit().putBoolean(KEY_SET_GPU, !prefs.getBoolean(KEY_SET_GPU, true)).apply();
             refreshSettingsButtons();
         });
         // m42: shown only in Player mode (applyModeVisibility), in the
@@ -976,7 +976,7 @@ public class LauncherActivity extends Activity {
         prefetchButton.setText("Disc prefetch (experimental): "
                 + onOff(prefs.getBoolean(KEY_SET_PREFETCH, false)));
         gpuButton.setText("GPU renderer (experimental): "
-                + onOff(prefs.getBoolean(KEY_SET_GPU, false)));
+                + onOff(prefs.getBoolean(KEY_SET_GPU, true)));
         wideButton.setText("Widescreen 16:9: "
                 + onOff(prefs.getBoolean(KEY_SET_WIDE, true)));
         opacityButton.setText("Button opacity: " + prefs.getString(KEY_SET_OPACITY, "high"));
