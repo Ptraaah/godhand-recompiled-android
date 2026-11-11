@@ -93,10 +93,16 @@ The last emulator habits live in the app's own surfaces, and they go.
   (thread placement and disc prefetch on at game start, stored toggles
   untouched), and a full forward push on the move stick dashes on its
   own — no double flick.
+- m44 (done): hotfix for the first public bug report — a black screen
+  on MediaTek (Mali GPU) phones, where the main Vulkan renderer cannot
+  open. If that happens the game now switches itself to the built-in
+  renderer in the same session so a picture appears, and the boot log
+  names the GPU it found.
 - Released: v0.43-m42 went out on 2026-11-11 as the first playable
   public pre-release, and the project is open to contributors
   (CONTRIBUTING.md). Playable, still unstable, help wanted — sound and
-  crowd performance are the standing fronts from here.
+  crowd performance are the standing fronts from here. v0.45-m44
+  followed on 2026-11-12 as a hotfix for the MediaTek black screen.
 
 ## Standing rules
 

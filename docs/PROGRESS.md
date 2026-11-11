@@ -101,6 +101,8 @@ Two smaller builds followed in the same day. m41 replaced the tiny pause pill in
 
 That is the build that ships today. It was also this morning's test build on my own phone: the launcher reads Player mode, Brawler Clean, widescreen on, and the game boots to the title and plays with the new START button where a thumb expects it.
 
+The first public bug report arrived the same day: on a Dimensity 8050 (Mali GPU) the game ran and the sound played, but the screen stayed black — the main Vulkan renderer could not open on that GPU, and the app had no backup plan. m44, out the next day (2026-11-12), is the answer: if the main renderer cannot start, the game switches itself to the built-in renderer in the same session and a picture appears, and the boot log now names the GPU it found. Whether the fallback fires correctly on a real Mali phone is, at the time of writing, awaiting the field reports this release asks for.
+
 ## The reports
 
 Every step above has a full engineering report, published as written at the time, wrong turns included:
@@ -122,8 +124,9 @@ Every step above has a full engineering report, published as written at the time
 - [M34-REPORT](milestones/M34-REPORT.md) · [M35-REPORT](milestones/M35-REPORT.md) · [M36-REPORT](milestones/M36-REPORT.md) · [M37-REPORT](milestones/M37-REPORT.md) · [M38-REPORT](milestones/M38-REPORT.md) — the rider, the funnel, residency (opened and closed), and the train merge; each with its log analysis alongside in the same folder
 - [M39-SHELL-REPORT](milestones/M39-SHELL-REPORT.md) · [M39-CORE-REPORT](milestones/M39-CORE-REPORT.md) · [M39-DELIVERY](milestones/M39-DELIVERY.md) — m39: native buttons and the redesign, the research-backed audio/GS fixes, and the combined delivery
 - [M40-CONTROLS-REPORT](milestones/M40-CONTROLS-REPORT.md) · [M41-STARTBTN-REPORT](milestones/M41-STARTBTN-REPORT.md) · [M42-PLAYERPERF-REPORT](milestones/M42-PLAYERPERF-REPORT.md) — m40-m42: the three selectable control styles and the two modes, the real START button and the defaults audit, Player-mode automatic performance and the auto-dash
+- [M44-GSFALLBACK-REPORT](milestones/M44-GSFALLBACK-REPORT.md) — m44: the first public bug report (a black screen on a MediaTek phone), the automatic graphics fallback that answers it, and the GPU name in the boot log
 
 ## Ground rules that have not changed
 
 - No game data in this repo, ever. You bring your own legitimate US disc; the app verifies it by SHA-256 and refuses anything else.
-- Playable now, still polishing: m42 plays on the reference phone, with sound at roughly 80% and crowd performance still being pushed. It shipped today (2026-11-11) as a public pre-release — playable, still unstable, labelled as both — and the project is open to contributors; when the state changes, this page changes.
+- Playable now, still polishing: the current build, m44, plays on the reference phone, with sound at roughly 80% and crowd performance still being pushed. m42 shipped 2026-11-11 as the first public pre-release and m44 followed on 2026-11-12 as a hotfix for the MediaTek black screen — playable, still unstable, labelled as both — and the project is open to contributors; when the state changes, this page changes.
