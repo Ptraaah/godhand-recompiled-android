@@ -98,11 +98,18 @@ The last emulator habits live in the app's own surfaces, and they go.
   open. If that happens the game now switches itself to the built-in
   renderer in the same session so a picture appears, and the boot log
   names the GPU it found.
+- m45 (done): the second public report (issue #3) — a modded disc
+  image was refused and the player got a silent dead screen. The
+  refusal is unchanged, but the app now says on screen why the game
+  did not start and what image it needs (a clean dump of the
+  original US disc, SLUS-21503).
 - Released: v0.43-m42 went out on 2026-11-11 as the first playable
   public pre-release, and the project is open to contributors
   (CONTRIBUTING.md). Playable, still unstable, help wanted — sound and
   crowd performance are the standing fronts from here. v0.45-m44
   followed on 2026-11-12 as a hotfix for the MediaTek black screen.
+  v0.46-m45 followed the same day, answering issue #3 with an
+  on-screen message when a disc image is refused.
 
 ## Standing rules
 

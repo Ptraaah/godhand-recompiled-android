@@ -13,7 +13,7 @@ There are Android builds of this game floating around, and they do run. The prob
 
 ## Status
 
-Current build: 0.45-m44, a hotfix on top of the first playable public pre-release (v0.43-m42). It plays on a real phone — stated plainly, with the remaining distance stated just as plainly: it is playable, it is not stable yet, and both halves of that sentence are true.
+Current build: 0.46-m45, a small fix on top of the m44 hotfix and the first playable public pre-release (v0.43-m42). It plays on a real phone — stated plainly, with the remaining distance stated just as plainly: it is playable, it is not stable yet, and both halves of that sentence are true.
 
 - The full game code translates, links and boots on a POCO F5 from a real disc, and plays: fights, crowds, the works. Performance improved step by step across a long run of measured builds; sound is close — about 80% of the way there by my own ear — and both are still being pushed.
 - The renderer that won is Path B: the PCSX2 graphics core, bridged onto Vulkan/Android. The home-grown GPU renderer and a later native-renderer experiment were both measured on the device and set aside; the bridge is what ships.
@@ -22,6 +22,7 @@ Current build: 0.45-m44, a hotfix on top of the first playable public pre-releas
 - m41 gave every control style one proper START button (that is the cutscene skip — it cannot be a tiny pill in a corner), and set the shipped defaults to the tuned values: widescreen on, resolution 1x.
 - m42 makes Player mode run the performance options automatically — thread placement and disc prefetch are on for the player without opening a single toggle — and a full push forward on the move stick now dashes on its own, no double flick needed.
 - m44 is a hotfix for the first public bug report: on MediaTek (Mali GPU) phones the game started and the sound played, but the screen stayed black — the main Vulkan renderer could not open on that GPU and the app had no backup plan. Now, if the main renderer cannot start, the game switches itself to the built-in renderer in the same session and a picture appears; and the boot log names the GPU it found, so a report from any phone says which hardware it ran on.
+- m45 answers the second public report (issue #3): a player whose disc image was a modded one pressed start and got a silent, dead screen — the port had refused the image, as it must, but only the boot log knew why. Now the app says it on screen: this image is not the original release, and a clean dump of the original US disc (SLUS-21503) is what it needs. The refusal itself is unchanged.
 
 The full story with device screenshots and boot-log numbers lives in [docs/PROGRESS.md](docs/PROGRESS.md).
 
@@ -29,7 +30,7 @@ The detailed roadmap lives in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Downloads
 
-Newest build: [v0.45-m44](https://github.com/Ptraaah/godhand-recompiled-android/releases/tag/v0.45-m44-gsfallback) on the releases page — a hotfix on top of the first playable public build (v0.43-m42), fixing a black screen on MediaTek (Mali GPU) phones. Download the zip, extract the APK, install it (it installs over m42 and the earlier builds), pick your own disc image, play. It is marked as a pre-release because that is what it is: playable today, still unstable in busy areas, audio still being improved.
+Newest build: [v0.46-m45](https://github.com/Ptraaah/godhand-recompiled-android/releases/tag/v0.46-m45-bootmsg) on the releases page — on top of the m44 hotfix and the first playable public build (v0.43-m42); it adds an on-screen explanation when a disc image is refused, instead of a silent dead screen. Download the zip, extract the APK, install it (it installs over m44, m42 and the earlier builds), pick your own disc image, play. It is marked as a pre-release because that is what it is: playable today, still unstable in busy areas, audio still being improved.
 
 The older v0.1.0-alpha (m33, with m27 as fallback) stays on the releases page for anyone who wants the earlier baseline. You still need your own disc (next section) — the downloads contain no game data.
 
