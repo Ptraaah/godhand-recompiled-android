@@ -1,6 +1,8 @@
 package dev.ptraaa.godhand;
 
+import android.app.AlertDialog;
 import android.app.NativeActivity;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.hardware.input.InputManager;
@@ -16,6 +18,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 import java.io.File;
 
@@ -67,6 +70,7 @@ public class GameActivity extends NativeActivity {
     private WindowManager windowManager;
     private TouchOverlay overlay;
     private boolean fpsOn;
+    private boolean bootFailureShown;
     private final Handler fpsHandler = new Handler(Looper.getMainLooper());
     private final Runnable fpsTick = new Runnable() {
         @Override
@@ -77,6 +81,34 @@ public class GameActivity extends NativeActivity {
                 } catch (Throwable ignored) {
                     // Library not loaded yet; the next tick retries.
                 }
+            }
+            fpsHandler.postDelayed(this, 500);
+        }
+    };
+    // m45: the boot-failure watch. The glue records why the port did not
+    // start (TouchPad.nativeBootFailure); until m45 nothing on the Java
+    // side ever asked, so a refused disc image (issue #3: a modded ISO
+    // stopped by the boot ELF hash check) left the player staring at a
+    // silent game screen. Polled on the same handler as the FPS label
+    // but in BOTH modes and regardless of the FPS toggle: this is player
+    // information, not a developer readout. Stops once shown.
+    private final Runnable bootWatchTick = new Runnable() {
+        @Override
+        public void run() {
+            if (bootFailureShown)
+                return;
+            String code = "";
+            try {
+                code = TouchPad.nativeBootFailure();
+            } catch (Throwable ignored) {
+                // Library not loaded yet; the next tick retries.
+            }
+            if (code != null && !code.isEmpty()) {
+                bootFailureShown = true;
+                BootLog.append(GameActivity.this,
+                        "[shell] m45: the game did not start (" + code + ") - telling the player why");
+                showBootFailure(code);
+                return;
             }
             fpsHandler.postDelayed(this, 500);
         }
@@ -97,26 +129,62 @@ public class GameActivity extends NativeActivity {
         // into the port's environment.
         SharedPreferences prefs = getSharedPreferences(LauncherActivity.PREFS, MODE_PRIVATE);
         IsoHolder.optGsScale = prefs.getString(LauncherActivity.KEY_SET_SCALE, "1");
-        IsoHolder.optThreadPolicy = prefs.getBoolean(LauncherActivity.KEY_SET_THREADS, false) ? "auto" : "off";
+        // m40: the app mode, read up here because m42 needs it before
+        // the performance options below.
+        String appMode = prefs.getString(LauncherActivity.KEY_SET_MODE, LauncherActivity.MODE_PLAYER);
+        boolean developerMode = LauncherActivity.MODE_DEVELOPER.equals(appMode);
+        // m42 (Pablo's rule): in Player mode the performance options
+        // are ON for the player automatically - thread placement runs
+        // "auto" and disc prefetch runs "on" for this game run,
+        // whatever the stored toggles say. The forcing happens only
+        // here, at the read site: no preference is ever written, so
+        // flipping back to Developer mode restores the owner's own
+        // toggle values exactly. In Developer mode the stored values
+        // rule, exactly as m41.
+        IsoHolder.optThreadPolicy = (!developerMode
+                || prefs.getBoolean(LauncherActivity.KEY_SET_THREADS, false)) ? "auto" : "off";
         IsoHolder.optVsync = prefs.getBoolean(LauncherActivity.KEY_SET_VSYNC, true) ? "1" : "0";
         IsoHolder.optShowFps = prefs.getBoolean(LauncherActivity.KEY_SET_FPS, true) ? "on" : "off";
         // Milestone 7: disc prefetch, owner-controlled, default off.
-        IsoHolder.optDiscPrefetch = prefs.getBoolean(LauncherActivity.KEY_SET_PREFETCH, false) ? "on" : "off";
+        // m42: forced on in Player mode, like thread placement above.
+        IsoHolder.optDiscPrefetch = (!developerMode
+                || prefs.getBoolean(LauncherActivity.KEY_SET_PREFETCH, false)) ? "on" : "off";
         // Milestone 10: GPU renderer, owner-controlled, default off.
+        // m42: deliberately NOT forced in Player mode - this toggle is
+        // an alternate experimental renderer (its GL context creation
+        // is Windows-only in this tree), not a performance booster on
+        // the shipped bridge path, and forcing it could switch
+        // players off the fast path. It follows the stored value in
+        // both modes, exactly as m41.
         IsoHolder.optGpuRenderer = prefs.getBoolean(LauncherActivity.KEY_SET_GPU, false) ? "on" : "off";
-        // Path B stage B6: widescreen 16:9, owner-controlled. Stage B7:
-        // default OFF (the pathb5 4:3 performance floor is the default
-        // again; widescreen is the owner's opt-in until it holds the same
-        // floor on device — see PATH-B-B7.md).
-        IsoHolder.optWidescreen = prefs.getBoolean(LauncherActivity.KEY_SET_WIDE, false) ? "on" : "off";
-        fpsOn = prefs.getBoolean(LauncherActivity.KEY_SET_FPS, true);
+        // Path B stage B6: widescreen 16:9, owner-controlled. Stage B7
+        // made it default OFF (owner opt-in); m41 makes it default ON
+        // (Pablo's order: true 16:9 is the shipped default). Only the
+        // unset-preference fallback changed - a saved owner value is
+        // read back exactly as stored.
+        IsoHolder.optWidescreen = prefs.getBoolean(LauncherActivity.KEY_SET_WIDE, true) ? "on" : "off";
+        // m40: the player's control style, handed to the overlay (the
+        // app mode itself is read further up, before the performance
+        // options - m42). Player mode keeps every debug/technical
+        // overlay text hidden, so the FPS label stays off there even
+        // if the (developer-only) FPS toggle is on.
+        String controlStyle = prefs.getString(LauncherActivity.KEY_SET_CONTROL_STYLE, "a");
+        fpsOn = prefs.getBoolean(LauncherActivity.KEY_SET_FPS, true) && developerMode;
         TouchPad.loadMapping(prefs);
+        // m42: the settings line reports the EFFECTIVE values, and in
+        // Player mode marks the two values Player mode forced, so a
+        // returned log never reads as "off in the launcher but on in
+        // the run" without a reason. Developer mode prints the stored
+        // values bare, exactly as m41.
+        String playerMark = developerMode ? "" : " (player mode)";
         BootLog.append(this, "settings loaded: scale=" + IsoHolder.optGsScale
-                + " threads=" + IsoHolder.optThreadPolicy + " vsync=" + IsoHolder.optVsync
+                + " threads=" + IsoHolder.optThreadPolicy + playerMark + " vsync=" + IsoHolder.optVsync
                 + " fps=" + IsoHolder.optShowFps
-                + " prefetch=" + IsoHolder.optDiscPrefetch
+                + " prefetch=" + IsoHolder.optDiscPrefetch + playerMark
                 + " gpu=" + IsoHolder.optGpuRenderer
                 + " wide=" + IsoHolder.optWidescreen
+                + " mode=" + appMode
+                + " controlStyle=" + controlStyle
                 + " opacity=" + prefs.getString(LauncherActivity.KEY_SET_OPACITY, "high"));
 
         // Milestone 3: the real file copy the launcher made of the ISO.
@@ -179,7 +247,7 @@ public class GameActivity extends NativeActivity {
         TouchPad.setOverlayPresent(true);
         float opacityFactor = opacityFactor(prefs.getString(LauncherActivity.KEY_SET_OPACITY, "high"));
         float sizeScale = sizeScale(prefs.getString(LauncherActivity.KEY_SET_BTNSIZE, "100"));
-        overlay = new TouchOverlay(this, prefs, opacityFactor, sizeScale, fpsOn);
+        overlay = new TouchOverlay(this, prefs, opacityFactor, sizeScale, fpsOn, controlStyle);
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -191,9 +259,10 @@ public class GameActivity extends NativeActivity {
         params.gravity = Gravity.TOP | Gravity.LEFT;
         try {
             windowManager.addView(overlay, params);
-            BootLog.append(this, "touch overlay added (0.40-m39) in its own window above the game surface: "
-                    + "two sticks, D-pad, face buttons, L1/L2/R1/R2, L3/R3, start/select, native EDIT button"
-                    + (fpsOn ? ", FPS label on" : ""));
+            BootLog.append(this, "touch overlay added (0.43-m42-playerperf) in its own window above the game surface: "
+                    + "control style " + overlay.styleName() + ", mode " + appMode
+                    + ", native EDIT button"
+                    + (fpsOn ? ", FPS label on" : ", FPS label hidden"));
             // One layout line with every control's bounds (see TouchOverlay.describeLayout).
             overlay.getViewTreeObserver().addOnGlobalLayoutListener(
                     new ViewTreeObserver.OnGlobalLayoutListener() {
@@ -201,7 +270,7 @@ public class GameActivity extends NativeActivity {
                         public void onGlobalLayout() {
                             overlay.getViewTreeObserver().removeOnGlobalLayoutListener(this);
                             BootLog.append(GameActivity.this,
-                                    "overlay layout (0.40-m39): " + overlay.describeLayout());
+                                    "overlay layout (0.43-m42-playerperf): " + overlay.describeLayout());
                         }
                     });
         } catch (Throwable t) {
@@ -234,6 +303,8 @@ public class GameActivity extends NativeActivity {
         TouchPad.setAppSuspended(false);
         if (fpsOn)
             fpsHandler.post(fpsTick);
+        // m45: watch for a boot failure in both modes (see bootWatchTick).
+        fpsHandler.post(bootWatchTick);
     }
 
     @Override
@@ -245,6 +316,7 @@ public class GameActivity extends NativeActivity {
         // throttled - the frame drops the owner felt outside the game.
         TouchPad.setAppSuspended(true);
         fpsHandler.removeCallbacks(fpsTick);
+        fpsHandler.removeCallbacks(bootWatchTick);
         // A finger or button held across a pause never delivers its UP
         // here; drop both sources so nothing sticks into the next run.
         if (overlay != null)
@@ -273,6 +345,47 @@ public class GameActivity extends NativeActivity {
         // the activity inside the still-running app process.
         TouchPad.requestAppStop();
         super.onDestroy();
+    }
+
+    // m45: tell the player, in plain words, why the game did not start,
+    // instead of leaving them on a silent screen. The dialog stays until
+    // they dismiss it - no timer runs it away - and OK takes them back
+    // to the launcher to pick another image; dismissing it instead
+    // still leaves them free to leave this screen with Back. If the
+    // dialog itself cannot go up, a long toast carries the same words.
+    private void showBootFailure(String code) {
+        final String message;
+        if ("hash".equals(code)) {
+            message = "This disc image is not the original release. Modded, patched or "
+                    + "translated images cannot run, and neither can discs from other "
+                    + "regions. Please use a clean dump of the original US disc "
+                    + "(SLUS-21503).";
+        } else if ("disc".equals(code)) {
+            message = "This disc image is not the original US release of the game. "
+                    + "Please use a clean dump of the original US disc (SLUS-21503).";
+        } else if ("image".equals(code)) {
+            message = "This file could not be read as a disc image. Please pick a "
+                    + "complete, undamaged dump of the original US disc (SLUS-21503).";
+        } else {
+            message = "The game could not start. Please try another disc image. The "
+                    + "boot log in the app folder says exactly what went wrong.";
+        }
+        try {
+            new AlertDialog.Builder(this)
+                    .setTitle("The game could not start")
+                    .setMessage(message)
+                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            finish();
+                        }
+                    })
+                    .show();
+        } catch (Throwable t) {
+            BootLog.append(this, "[shell] m45: failure dialog failed, using a toast instead: "
+                    + BootLog.stack(t));
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        }
     }
 
     // If a controller goes away mid-press its UP never arrives; clearing

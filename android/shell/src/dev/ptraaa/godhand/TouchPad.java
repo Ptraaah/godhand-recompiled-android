@@ -315,4 +315,11 @@ public final class TouchPad {
     // Milestone 5: the shell FPS label's text, from the runtime's
     // present-based statistics ("" until the library is loaded).
     public static native String nativeFpsText();
+
+    // m45: the boot-failure code, recorded by the glue when the port
+    // returns without a running game: "" while the game runs (or after
+    // it ended cleanly), else "hash" / "disc" / "image" / "failed".
+    // GameActivity polls it and tells the player why the game did not
+    // start. See nativeBootFailure in the glue.
+    public static native String nativeBootFailure();
 }
