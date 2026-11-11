@@ -496,6 +496,17 @@ namespace
         // Which renderer paths the feature negotiation picked on this driver.
         if (GSDeviceVK *device = GSDeviceVK::GetInstance())
         {
+            // M44: name the GPU in every successful boot log, so a report
+            // from any phone identifies its hardware without a follow-up
+            // question. The properties are already inside the device (no
+            // extra Vulkan call); this prints only on the open-success
+            // path — on an open failure the port's own [gs] fallback line
+            // is the record.
+            const VkPhysicalDeviceProperties &props = device->GetDeviceProperties();
+            std::fprintf(stderr, "[pcsx2-gs] Vulkan device: %s (vendor 0x%04x, device 0x%04x, Vulkan %u.%u.%u)\n",
+                         props.deviceName, props.vendorID, props.deviceID,
+                         VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion),
+                         VK_VERSION_PATCH(props.apiVersion));
             const GSDevice::FeatureSupport f = device->Features();
             const GSDeviceVK::OptionalExtensions &oe = device->GetOptionalExtensions();
             std::fprintf(stderr,
