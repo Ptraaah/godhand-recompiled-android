@@ -101,9 +101,26 @@ public class LauncherActivity extends Activity {
     static final String KEY_SET_GPU = "set_gpu";
     // Path B stage B6: widescreen 16:9 (game aspect patch + composed 16:9
     // frame in the path B build). Stage B7: default off (owner opt-in).
+    // m41: default ON (Pablo's order - true 16:9 is the app's shipped
+    // face). Only the unset-preference fallback changed; a value the
+    // owner already saved is read back untouched.
     static final String KEY_SET_WIDE = "set_wide";
     static final String KEY_SET_OPACITY = "set_opacity";
     static final String KEY_SET_BTNSIZE = "set_btnsize";
+    // m40: the player's control scheme (TouchOverlay STYLE_A/B/C from
+    // the design mockups - all three are built in, the player picks).
+    // Default A (Brawler Clean), the designer's recommendation.
+    static final String KEY_SET_CONTROL_STYLE = "set_control_style";
+    private static final String[] STYLE_VALUES = {"a", "b", "c"};
+    private static final String[] STYLE_LABELS = {"Brawler Clean", "Gesture Evade", "Radial Pro"};
+    // m40: app mode. Player (the default) is the clean player-facing
+    // surface: no boot log card, no remap cards, no technical toggles,
+    // no in-game debug text. Developer shows everything from m39.
+    static final String KEY_SET_MODE = "set_mode";
+    static final String MODE_PLAYER = "player";
+    static final String MODE_DEVELOPER = "developer";
+    private static final String[] MODE_VALUES = {MODE_PLAYER, MODE_DEVELOPER};
+    private static final String[] MODE_LABELS = {"Player", "Developer"};
     private static final String[] SCALE_VALUES = {"0.5", "0.75", "1", "1.5", "2", "3"};
     private static final String[] OPACITY_VALUES = {"high", "medium", "low"};
     private static final String[] SIZE_VALUES = {"80", "90", "100", "110", "125", "140"};
@@ -133,6 +150,19 @@ public class LauncherActivity extends Activity {
     private Button wideButton;
     private Button opacityButton;
     private Button sizeButton;
+    private Button modeButton;
+    private Button controlStyleButton;
+    // m42: the one PERFORMANCE-card line shown only in Player mode,
+    // where the technical toggles are hidden - the options they
+    // control run automatically there (GameActivity forces them for
+    // the run), and this note says so in their place.
+    private TextView perfAutoNote;
+    // Mode-gated surfaces (hidden in Player mode): the remap cards,
+    // the reset-mapping button and the boot log card.
+    private LinearLayout touchRemapCard;
+    private LinearLayout padRemapCard;
+    private Button resetMappingButton;
+    private LinearLayout logCard;
     private final Map<String, Button> touchRemapButtons = new HashMap<>();
     private final Map<String, Button> padRemapButtons = new HashMap<>();
     private boolean startAfterPick;
@@ -295,7 +325,7 @@ public class LauncherActivity extends Activity {
         subtitle.setTextColor(COL_LOG);
         heroText.addView(subtitle);
         TextView version = new TextView(this);
-        version.setText("Version 0.40-m39");
+        version.setText("Version 0.43-m42-playerperf");
         version.setTextSize(11);
         version.setTextColor(COL_ACCENT);
         heroText.addView(version);
@@ -380,6 +410,20 @@ public class LauncherActivity extends Activity {
             prefs.edit().putBoolean(KEY_SET_GPU, !prefs.getBoolean(KEY_SET_GPU, false)).apply();
             refreshSettingsButtons();
         });
+        // m42: shown only in Player mode (applyModeVisibility), in the
+        // space the hidden toggles leave: one quiet line, same style
+        // as the CONTROLS card's hint, so the player knows performance
+        // is handled without a single technical switch on screen.
+        perfAutoNote = new TextView(this);
+        perfAutoNote.setText("Performance options run automatically in Player mode.");
+        perfAutoNote.setTextSize(13);
+        perfAutoNote.setTextColor(COL_LOG);
+        LinearLayout.LayoutParams perfNoteParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        perfNoteParams.topMargin = dp(8);
+        perfAutoNote.setLayoutParams(perfNoteParams);
+        perfCard.addView(perfAutoNote);
 
         LinearLayout displayCard = card(root, "DISPLAY AND BUTTONS");
         fpsButton = rowButton(displayCard, v -> {
@@ -394,7 +438,7 @@ public class LauncherActivity extends Activity {
         });
         wideButton = rowButton(displayCard, v -> {
             SharedPreferences prefs = settingsPrefs();
-            prefs.edit().putBoolean(KEY_SET_WIDE, !prefs.getBoolean(KEY_SET_WIDE, false)).apply();
+            prefs.edit().putBoolean(KEY_SET_WIDE, !prefs.getBoolean(KEY_SET_WIDE, true)).apply();
             refreshSettingsButtons();
         });
         opacityButton = rowButton(displayCard, v -> {
@@ -410,28 +454,45 @@ public class LauncherActivity extends Activity {
             refreshSettingsButtons();
         });
 
-        LinearLayout controlsCard = card(root, "CONTROLS - BUTTON LAYOUT");
+        LinearLayout controlsCard = card(root, "CONTROLS");
+        // Mode first: it gates what else this page shows, and it must
+        // stay reachable in BOTH modes (it lives here, in a card that
+        // Player mode keeps).
+        modeButton = rowButton(controlsCard, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            String next = nextOf(MODE_VALUES, prefs.getString(KEY_SET_MODE, MODE_PLAYER));
+            prefs.edit().putString(KEY_SET_MODE, next).apply();
+            refreshSettingsButtons();
+            applyModeVisibility();
+        });
+        // The control style is a player feature: visible in both modes,
+        // takes effect the next time the game starts.
+        controlStyleButton = rowButton(controlsCard, v -> {
+            SharedPreferences prefs = settingsPrefs();
+            String next = nextOf(STYLE_VALUES, prefs.getString(KEY_SET_CONTROL_STYLE, "a"));
+            prefs.edit().putString(KEY_SET_CONTROL_STYLE, next).apply();
+            refreshSettingsButtons();
+        });
         Button resetLayoutButton = makeButton("Reset button layout", COL_ROW);
         resetLayoutButton.setTextSize(14);
         resetLayoutButton.setLayoutParams(rowParams(52));
         resetLayoutButton.setOnClickListener(v -> {
             SharedPreferences.Editor editor = settingsPrefs().edit();
-            String[] ids = {"stick_left", "stick_right",
-                    "btn_triangle", "btn_circle", "btn_cross", "btn_square",
-                    "btn_dpad_up", "btn_dpad_down", "btn_dpad_left", "btn_dpad_right",
-                    "btn_l3", "btn_r3",
-                    "btn_l1", "btn_l2", "btn_r1", "btn_r2", "btn_start", "btn_select"};
-            for (String id : ids) {
+            // All schemes' controls (and the retired m39 ones) live in
+            // TouchOverlay's list, so a reset covers every style.
+            for (String id : TouchOverlay.ALL_LAYOUT_IDS) {
                 editor.remove("lay_" + id + "_x");
                 editor.remove("lay_" + id + "_y");
             }
             editor.apply();
-            status.setText("Button layout reset - the game will use the default positions. "
-                    + "In the game, the EDIT button (top centre) moves the buttons.");
+            status.setText("Button layout reset - every control style will use its default positions. "
+                    + "In the game, the EDIT button (top centre) moves the controls.");
         });
         controlsCard.addView(resetLayoutButton);
         TextView editHint = new TextView(this);
-        editHint.setText("Move buttons: in the game, tap EDIT at the top, drag the buttons where you want them, tap DONE.");
+        editHint.setText("Control style applies the next time the game starts. "
+                + "Move the controls: in the game, tap EDIT at the top, drag them where you want them, tap DONE. "
+                + "Each style remembers its own positions.");
         editHint.setTextSize(13);
         editHint.setTextColor(COL_LOG);
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(
@@ -443,7 +504,10 @@ public class LauncherActivity extends Activity {
         refreshSettingsButtons();
 
         // ---- Remap cards, below settings in visual priority.
+        // Developer-mode surfaces (applyModeVisibility hides them in
+        // Player mode): the raw remap table is a technical surface.
         LinearLayout touchCard = card(root, "REMAP TOUCH BUTTONS");
+        touchRemapCard = touchCard;
         for (String control : PadMapping.TOUCH_CONTROLS) {
             final String id = control;
             Button row = rowButton(touchCard, v -> {
@@ -456,6 +520,7 @@ public class LauncherActivity extends Activity {
             touchRemapButtons.put(id, row);
         }
         LinearLayout padCard = card(root, "REMAP GAMEPAD BUTTONS");
+        padRemapCard = padCard;
         for (String key : PadMapping.PAD_KEYS) {
             final String id = key;
             Button row = rowButton(padCard, v -> {
@@ -467,7 +532,7 @@ public class LauncherActivity extends Activity {
             row.setTextSize(13);
             padRemapButtons.put(id, row);
         }
-        Button resetMappingButton = makeButton("Reset mapping", COL_PLAIN);
+        resetMappingButton = makeButton("Reset mapping", COL_PLAIN);
         resetMappingButton.setTextSize(14);
         resetMappingButton.setLayoutParams(rowParams(50));
         resetMappingButton.setOnClickListener(v -> {
@@ -484,8 +549,9 @@ public class LauncherActivity extends Activity {
         refreshRemapButtons();
 
         // ---- Boot log: a quiet developer detail at the very bottom,
-        // with Share / Reload as small secondary buttons.
-        LinearLayout logCard = card(root, "BOOT LOG - DEVELOPER DETAIL");
+        // with Share / Reload as small secondary buttons. Developer
+        // mode only - in Player mode the whole card is gone.
+        logCard = card(root, "BOOT LOG - DEVELOPER DETAIL");
         LinearLayout logActions = new LinearLayout(this);
         logActions.setOrientation(LinearLayout.HORIZONTAL);
         Button share = makeButton("Share boot log", COL_ROW);
@@ -527,8 +593,48 @@ public class LauncherActivity extends Activity {
         page.addView(root);
         setContentView(page);
         root.requestApplyInsets();
-        BootLog.append(this, "launcher opened (0.40-m39)");
+        applyModeVisibility();
+        BootLog.append(this, "launcher opened (0.43-m42-playerperf), mode="
+                + settingsPrefs().getString(KEY_SET_MODE, MODE_PLAYER)
+                + ", control style=" + settingsPrefs().getString(KEY_SET_CONTROL_STYLE, "a"));
         refreshUi();
+    }
+
+    // Player / Developer gating. Player mode is the clean game face:
+    // the boot log card, both remap cards (and their reset), and the
+    // technical toggles (thread placement, disc prefetch, GPU renderer,
+    // FPS counter) are GONE - not disabled, gone. Developer mode shows
+    // the full m39 surface. m42 adds one inverse surface: the
+    // PERFORMANCE card's "runs automatically" note is visible only in
+    // Player mode, where GameActivity forces those options on for the
+    // run (the stored toggles themselves are never touched). Everything else (hero, status, PLAY, ISO
+    // picker, resolution, VSync, widescreen, button opacity/size, the
+    // CONTROLS card with Mode + Control Style + layout reset) stays in
+    // both modes. Reading the one preference and re-applying visibility
+    // is all a mode switch does, so it re-renders instantly and cannot
+    // disturb any other setting.
+    private void applyModeVisibility() {
+        boolean developer = MODE_DEVELOPER.equals(
+                settingsPrefs().getString(KEY_SET_MODE, MODE_PLAYER));
+        int visibility = developer ? android.view.View.VISIBLE : android.view.View.GONE;
+        threadsButton.setVisibility(visibility);
+        prefetchButton.setVisibility(visibility);
+        gpuButton.setVisibility(visibility);
+        fpsButton.setVisibility(visibility);
+        // m42: the automatic-performance note is the inverse surface -
+        // it stands in for the hidden toggles in Player mode and is
+        // gone in Developer mode, where the toggles speak for
+        // themselves.
+        if (perfAutoNote != null)
+            perfAutoNote.setVisibility(developer ? android.view.View.GONE : android.view.View.VISIBLE);
+        if (touchRemapCard != null)
+            touchRemapCard.setVisibility(visibility);
+        if (padRemapCard != null)
+            padRemapCard.setVisibility(visibility);
+        if (resetMappingButton != null)
+            resetMappingButton.setVisibility(visibility);
+        if (logCard != null)
+            logCard.setVisibility(visibility);
     }
 
     @Override
@@ -872,9 +978,22 @@ public class LauncherActivity extends Activity {
         gpuButton.setText("GPU renderer (experimental): "
                 + onOff(prefs.getBoolean(KEY_SET_GPU, false)));
         wideButton.setText("Widescreen 16:9: "
-                + onOff(prefs.getBoolean(KEY_SET_WIDE, false)));
+                + onOff(prefs.getBoolean(KEY_SET_WIDE, true)));
         opacityButton.setText("Button opacity: " + prefs.getString(KEY_SET_OPACITY, "high"));
         sizeButton.setText("Button size: " + prefs.getString(KEY_SET_BTNSIZE, "100") + "%");
+        if (modeButton != null)
+            modeButton.setText("Mode: " + labelOf(MODE_VALUES, MODE_LABELS,
+                    prefs.getString(KEY_SET_MODE, MODE_PLAYER)));
+        if (controlStyleButton != null)
+            controlStyleButton.setText("Control style: " + labelOf(STYLE_VALUES, STYLE_LABELS,
+                    prefs.getString(KEY_SET_CONTROL_STYLE, "a")));
+    }
+
+    private static String labelOf(String[] values, String[] labels, String current) {
+        for (int i = 0; i < values.length; i++)
+            if (values[i].equals(current))
+                return labels[i];
+        return labels[0];
     }
 
     private void refreshRemapButtons() {

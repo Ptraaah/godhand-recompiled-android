@@ -52,9 +52,11 @@ public final class IsoHolder {
     // Path B stage B6: the owner's widescreen choice (16:9 game patch +
     // composed 16:9 frame). In the path B variant the glue seeds
     // PS2X_WIDESCREEN from this field (an external godhand.ini
-    // PS2X_WIDESCREEN line still wins, as the kill switch). Stage B7:
-    // default off — see GameActivity / PATH-B-B7.md.
-    public static String optWidescreen = "off";
+    // PS2X_WIDESCREEN line still wins, as the kill switch). Stage B7
+    // made the default off; m41 makes it on, matching the launcher
+    // preference default (GameActivity overwrites this field from the
+    // preference on every boot, so this is only the pre-read net).
+    public static String optWidescreen = "on";
 
     public static String isoFdPath() {
         return isoPfd == null ? "" : "/proc/self/fd/" + isoPfd.getFd();

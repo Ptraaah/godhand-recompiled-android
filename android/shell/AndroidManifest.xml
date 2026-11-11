@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.ptraaa.godhand"
-    android:versionCode="47"
-    android:versionName="0.40-m39">
+    android:versionCode="53"
+    android:versionName="0.46-m45-bootmsg">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
