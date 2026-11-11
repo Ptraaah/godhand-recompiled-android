@@ -1,7 +1,10 @@
 # v0.47-m47 — our native engine becomes the default
 
-Release page: https://github.com/Ptraaah/godhand-recompiled-android/releases/tag/v0.47-m47-nativeflip
-(pre-release, tag v0.47-m47-nativeflip). These are the release notes as published.
+WITHDRAWN on 2026-11-12: this release was taken down the same day
+it was published, and its tag was deleted. The native-flip build
+goes back to internal testing — it is not stable enough to be the
+public build. The current public build is v0.46-m45. These are the
+release notes as they were published, kept for the record.
 
 God Hand, recompiled to run natively on Android. Not an emulator: the
 game's code is translated ahead of time into native ARM code, and the app
@@ -77,11 +80,8 @@ this build exists to find out.
 
 ## Install
 
-1. Download godhand-0.47-m47-nativeflip.zip (35,570,987 bytes, md5
-   65811807d6b70dfc26b7888d62d288c0) and extract the APK inside.
-2. Install it — it installs over m45 (and m44 and the earlier builds)
-   if you already have one of those.
-3. Open the app, pick your game ISO, play.
+Withdrawn — there is no m47 download. Use the current public
+build, v0.46-m45, from the releases page instead.
 
 ## Help wanted
 

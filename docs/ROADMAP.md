@@ -107,25 +107,31 @@ The last emulator habits live in the app's own surfaces, and they go.
   refusal is unchanged, but the app now says on screen why the game
   did not start and what image it needs (a clean dump of the
   original US disc, SLUS-21503).
-- m47 (done, stage 2 opened): the default engine swaps. Our own
-  native ARUS GPU renderer is the main path again — the first
-  native-default build since m25 — and the PCSX2 bridge becomes the
-  selectable fallback. The GPU renderer toggle now defaults to on,
-  so a fresh install's native path is the GPU backend, not the CPU
-  one. Stage 2, the native-main-path campaign, is the active
-  programme from here: it is scoped in
-  docs/milestones/STAGE2-NATIVE-MAINPATH-SCOPE.md, and m47 is its
-  baseline build — defaults only, on purpose, so the next rounds
-  plan against the native path's true device numbers.
+- m47 (internal testing, stage 2 opened): in the test build, the
+  default engine swaps. Our own native ARUS GPU renderer is the
+  main path again — the first native-default build since m25 — and
+  the PCSX2 bridge becomes the selectable fallback. The GPU
+  renderer toggle now defaults to on, so a fresh install's native
+  path is the GPU backend, not the CPU one. Stage 2, the
+  native-main-path campaign, is the active programme from here: it
+  is scoped in docs/milestones/STAGE2-NATIVE-MAINPATH-SCOPE.md,
+  and m47 is its baseline build — defaults only, on purpose, so
+  the next rounds plan against the native path's true device
+  numbers. It is an internal build, not a public release: it was
+  briefly published on 2026-11-12 and taken down the same day,
+  because the native path is not stable enough to ship yet. The
+  public build stays m45 until the campaign earns the swap on
+  measurements.
 - Released: v0.43-m42 went out on 2026-11-11 as the first playable
   public pre-release, and the project is open to contributors
   (CONTRIBUTING.md). Playable, still unstable, help wanted — sound and
   crowd performance are the standing fronts from here. v0.45-m44
   followed on 2026-11-12 as a hotfix for the MediaTek black screen.
   v0.46-m45 followed the same day, answering issue #3 with an
-  on-screen message when a disc image is refused. v0.47-m47 followed
-  the same day, opening stage 2: the native engine becomes the
-  default.
+  on-screen message when a disc image is refused, and it is the
+  current public build. Stage 2, the native-main-path campaign,
+  opened the same day in internal testing (see the m47 line
+  above); nothing from it is a public release yet.
 
 ## Standing rules
 
