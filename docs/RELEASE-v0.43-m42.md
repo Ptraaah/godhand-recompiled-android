@@ -7,8 +7,6 @@ God Hand, recompiled to run natively on Android. Not an emulator: the
 game's code is translated ahead of time into native ARM code, and the app
 around it is built for phones from the start.
 
-Watch the trailer: https://youtu.be/i7LGPYvCylo
-
 You bring your own legally owned copy of the game (US version,
 SLUS-21503). There is no game data in this download, and there never
 will be.
