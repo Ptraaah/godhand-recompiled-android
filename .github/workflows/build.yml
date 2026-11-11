@@ -29,6 +29,11 @@ jobs:
     name: bridge (libpcsx2gs + libshaderc)
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      # Pin ccache's home so the setup step, the cache action and the
+      # build all agree on where the cache lives (ccache 4's own default
+      # is ~/.cache/ccache; nothing in this job may guess at it).
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v4
 
@@ -39,17 +44,44 @@ jobs:
           ndk-version: r27c
           add-to-path: true
 
+      # ccache is only a build-speed accelerator, so nothing about it
+      # may ever fail the build. Installing it goes through apt, and a
+      # runner DNS failure ("Temporary failure resolving
+      # 'security.ubuntu.com'", apt exit 100) once killed this job
+      # before any compile ran — twice in a row. So: retry the install,
+      # keep the step non-fatal, and let the build below use the ccache
+      # launcher only when the binary is actually there.
       - name: Set up ccache
+        id: ccache
+        continue-on-error: true
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ccache
-          ccache --set-config=max_size=1G
-          ccache --zero-stats
+          installed=0
+          for attempt in 1 2 3; do
+            if sudo apt-get update -qq && sudo apt-get install -y -qq ccache; then
+              installed=1
+              break
+            fi
+            echo "apt attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          if [ "$installed" = 1 ] && command -v ccache >/dev/null 2>&1; then
+            ccache --set-config=max_size=1G
+            ccache --zero-stats
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ccache could not be installed; building without it (slower, same result)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
 
+      # The cache lives in $CCACHE_DIR (job env above). The path this
+      # step used to save, ~/.ccache, is ccache 3's home; ccache 4
+      # never wrote there, the save always warned "path does not
+      # exist", and the cache never actually persisted between runs.
       - name: Cache ccache
+        if: steps.ccache.outputs.available == 'true'
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
+          path: ${{ github.workspace }}/.ccache
           key: ccache-bridge-${{ hashFiles('path-b/**') }}
           restore-keys: |
             ccache-bridge-
@@ -63,16 +95,21 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
+          LAUNCHER_ARGS=()
+          if command -v ccache >/dev/null 2>&1; then
+            LAUNCHER_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+          else
+            echo "ccache unavailable: configuring without a compiler launcher"
+          fi
           cmake -S path-b -B path-b/build -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-26 \
             -DANDROID_STL=c++_static \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            "${LAUNCHER_ARGS[@]}"
           cmake --build path-b/build --target pcsx2gs -j "$(nproc)"
-          ccache --show-stats
+          if command -v ccache >/dev/null 2>&1; then ccache --show-stats; fi
 
       - name: Collect native libraries
         run: |
