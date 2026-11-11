@@ -1,8 +1,11 @@
+
+
+https://github.com/user-attachments/assets/2e8b4832-02c6-41e4-bd40-952ee78b58b8
+
+
 # God Hand, recompiled for Android
 
 This is an Android port of God Hand (the PS2 one, Clover Studio, 2006) built on top of the open-source God Hand recompilation work. Instead of emulating the console while the game runs, the game's code gets translated ahead of time into native code — here, native ARM for a phone. The shell around it is being written for Android from the start: touch controls, settings that stay where you put them, and a renderer chosen and tuned for mobile chips instead of carried over from a desktop build.
-
-Watch the trailer: https://youtu.be/i7LGPYvCylo
 
 ## Why
 
