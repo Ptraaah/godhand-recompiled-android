@@ -7,23 +7,29 @@ https://github.com/user-attachments/assets/2e8b4832-02c6-41e4-bd40-952ee78b58b8
 
 This is an Android port of God Hand (the PS2 one, Clover Studio, 2006) built on top of the open-source God Hand recompilation work. Instead of emulating the console while the game runs, the game's code gets translated ahead of time into native code — here, native ARM for a phone. The shell around it is being written for Android from the start: touch controls, settings that stay where you put them, and a renderer chosen and tuned for mobile chips instead of carried over from a desktop build.
 
+## Development discontinued
+
+I have stopped developing this project. The full announcement is here: [I have to stop here: this project is discontinued](https://github.com/Ptraaah/godhand-recompiled-android/issues/6).
+
+v0.46-m45 is my last public build. The code, documentation, and releases will stay here. If someone else wants to carry this work forward, fork it and continue it under the GPL-3.0 licence. You do not need to ask me.
+
 ## Why
 
 There are Android builds of this game floating around, and they do run. The problem is they are sealed. Settings reset themselves, the tuning knobs that exist in the code are not reachable, and when something lags there is nothing you can open up and fix. This one is the opposite bet: open source, every knob reachable, and if a specific scene is heavy it can be looked at and tuned for that scene. Slower to arrive, but nothing in it is a dead end.
 
 ## Status
 
-Current build: 0.46-m45, on top of the m44 hotfix and the first playable public pre-release (v0.43-m42). It plays on a real phone — stated plainly, with the remaining distance stated just as plainly: it is playable, it is not stable yet, and both halves of that sentence are true.
+Last build: 0.46-m45, on top of the m44 hotfix and the first playable public pre-release (v0.43-m42). It plays on a real phone — stated plainly, with the remaining distance stated just as plainly: it is playable, it is not stable yet, and both halves of that sentence are true.
 
-- The full game code translates, links and boots on a POCO F5 from a real disc, and plays: fights, crowds, the works. Performance improved step by step across a long run of measured builds; sound is close — about 80% of the way there by my own ear — and both are still being pushed.
-- The renderer story has two eras. Path B — the PCSX2 graphics core, bridged onto Vulkan/Android — won the measured rounds and shipped as the default from m24 through m45, because the bridge is the faster engine on the reference phone today. The home-grown native renderer (ARUS) is the opposite bet: ours, written for mobile chips, with every bottleneck in it openable. A stage-2 campaign to make the native renderer the main path again is in internal testing (last bullet below); until it earns the default back on measurements, the bridge stays the shipped engine, with the native renderer in the package as the selectable fallback.
+- The full game code translates, links and boots on a POCO F5 from a real disc, and plays: fights, crowds, the works. Performance improved step by step across a long run of measured builds; sound got close — about 80% of the way there by my own ear — but neither performance nor sound reached the finish I wanted before I stopped.
+- The renderer story has two eras. Path B — the PCSX2 graphics core, bridged onto Vulkan/Android — won the measured rounds and shipped as the default from m24 through m45, because the bridge is the faster engine on the reference phone today. The home-grown native renderer (ARUS) is the opposite bet: ours, written for mobile chips, with every bottleneck in it openable. A stage-2 campaign to make the native renderer the main path again was in internal testing when development stopped; it never earned the default back on measurements, so the bridge remained the shipped engine, with the native renderer in the package as the selectable fallback.
 - m39 rebuilt the app side of things: real native Android buttons instead of drawn ones, a redesigned ready-to-play launcher, and an app icon of its own — plus research-backed audio and graphics fixes under the hood.
 - m40 stopped copying a PS2 pad. The controls are now three phone-native styles — Brawler Clean, Gesture Evade, Radial Pro — and the player picks between them in the settings, because what fits one player's thumbs is not what fits another's. The same build added Player mode and Developer mode: Player is the clean game, Developer shows the boot log and the technical surfaces.
 - m41 gave every control style one proper START button (that is the cutscene skip — it cannot be a tiny pill in a corner), and set the shipped defaults to the tuned values: widescreen on, resolution 1x.
 - m42 makes Player mode run the performance options automatically — thread placement and disc prefetch are on for the player without opening a single toggle — and a full push forward on the move stick now dashes on its own, no double flick needed.
 - m44 is a hotfix for the first public bug report: on MediaTek (Mali GPU) phones the game started and the sound played, but the screen stayed black — the main Vulkan renderer could not open on that GPU and the app had no backup plan. Now, if the main renderer cannot start, the game switches itself to the built-in renderer in the same session and a picture appears; and the boot log names the GPU it found, so a report from any phone says which hardware it ran on.
 - m45 answers the second public report (issue #3): a player whose disc image was a modded one pressed start and got a silent, dead screen — the port had refused the image, as it must, but only the boot log knew why. Now the app says it on screen: this image is not the original release, and a clean dump of the original US disc (SLUS-21503) is what it needs. The refusal itself is unchanged.
-- In internal testing: stage 2, the native-main-path campaign — making our own ARUS GPU renderer the default engine again, with the PCSX2 bridge as the selectable fallback. Its first test build (m47, the flip: native seed plus the GPU renderer toggle defaulting to on, so a fresh install's "native" is the GPU backend rather than the slow CPU one) exists to capture the true native baseline the campaign's next rounds plan against. It stays off the releases page until it proves itself on real phones; the public build remains m45.
+- Stage 2, the native-main-path campaign, was still in internal testing when development stopped: making our own ARUS GPU renderer the default engine again, with the PCSX2 bridge as the selectable fallback. Its first test build (m47, the flip: native seed plus the GPU renderer toggle defaulting to on, so a fresh install's "native" is the GPU backend rather than the slow CPU one) captured the native baseline the campaign planned against. It never earned a public release; the public build remains m45.
 
 The full story with device screenshots and boot-log numbers lives in [docs/PROGRESS.md](docs/PROGRESS.md).
 
@@ -31,17 +37,15 @@ The detailed roadmap lives in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Downloads
 
-Newest build: [v0.46-m45](https://github.com/Ptraaah/godhand-recompiled-android/releases/tag/v0.46-m45-bootmsg) on the releases page — on top of the m44 hotfix and the first playable public build (v0.43-m42); it answers the second public report (issue #3) by saying on screen why the game did not start when a disc image is refused, instead of leaving a silent dead screen. Download the zip, extract the APK, install it (it installs over m44, m42 and the earlier builds), pick your own disc image, play. It is marked as a pre-release because that is what it is: playable today, still unstable in busy areas, audio still being improved.
+Newest build: [v0.46-m45](https://github.com/Ptraaah/godhand-recompiled-android/releases/tag/v0.46-m45-bootmsg) on the releases page — on top of the m44 hotfix and the first playable public build (v0.43-m42); it answers the second public report (issue #3) by saying on screen why the game did not start when a disc image is refused, instead of leaving a silent dead screen. Download the zip, extract the APK, install it (it installs over m44, m42 and the earlier builds), pick your own disc image, play. It is marked as a pre-release because that is what it is: playable today, still unstable in busy areas, with the audio unfinished.
 
 The older v0.1.0-alpha (m33, with m27 as fallback) stays on the releases page for anyone who wants the earlier baseline. You still need your own disc (next section) — the downloads contain no game data.
 
-## Contributors welcome
+## Carrying it forward
 
-This is a one-person project and it is now open for help, plainly: the game plays, but it is still unstable, and I want it better than I can get it alone.
+I am no longer developing or maintaining this project, and I will not be reviewing new work here. Please do not open a report expecting a fix from me.
 
-Help is needed most with performance and audio tuning, testing on phones other than the one POCO F5 everything is measured on, feedback on the three control styles, and playtesting the later stages nobody has verified yet. The single most useful contribution is a bug report with a boot log attached: switch to Developer mode in the settings, play until it breaks, then Share boot log from the launcher and attach the file to your issue.
-
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) — how to get the build, how to report so it gets fixed, and where the front lines are. Issues labelled `help wanted` and `good first issue` are the ones to grab.
+If you want to take this further, fork it and continue it under the GPL-3.0 licence. The announcement linked above says the rest. [CONTRIBUTING.md](CONTRIBUTING.md) still maps the front lines as I left them: performance and audio tuning, testing on phones other than the one POCO F5 everything was measured on, the three control styles, and the later stages nobody has verified yet.
 
 ## You need your own disc
 
